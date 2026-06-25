@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>三国风云·轻量 SLG</title>
+  <style>
+    :root {
+      --bg: #f5e6c8;
+      --panel: #fff8e7;
+      --border: #8b4513;
+      --accent-red: #c41e3a;
+      --accent-green: #1a5c1a;
+      --accent-blue: #2980b9;
+      --accent-purple: #8e44ad;
+      --accent-orange: #e67e22;
+      --text: #3d2b1f;
+      --muted: #6d5a4b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    #app { display: flex; flex-direction: column; height: 100vh; }
+    header {
+      background: var(--panel);
+      border-bottom: 2px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    header h1 { margin: 0; font-size: 1.3rem; color: var(--accent-red); }
+    .top-resources { display: flex; gap: 16px; flex-wrap: wrap; }
+    .res-item { font-weight: bold; }
+    .main { display: flex; flex: 1; overflow: hidden; }
+    aside {
+      width: 160px;
+      background: var(--panel);
+      border-right: 2px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      gap: 6px;
+    }
+    aside button {
+      padding: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    aside button:hover { background: #f0dcc0; }
+    aside button.active { background: var(--accent-red); color: #fff; border-color: var(--accent-red); }
+    #content {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+    #log-panel {
+      height: 160px;
+      background: var(--panel);
+      border-top: 2px solid var(--border);
+      padding: 8px 16px;
+      overflow-y: auto;
+    }
+    #log-panel h3 { margin: 0 0 6px; font-size: 1rem; }
+    .log-entry { margin: 2px 0; font-size: 0.85rem; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(61,43,31,0.15);
+    }
+    .card h3 { margin: 0 0 8px; color: var(--accent-red); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    button.action {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 4px 4px 4px 0;
+    }
+    button.action:hover { background: #f0dcc0; }
+    button.action:disabled { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid var(--border); padding: 6px; text-align: center; }
+    th { background: var(--bg); }
+    .faction-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; }
+    .skill-tag { background: var(--accent-green); color: #fff; padding: 1px 6px; border-radius: 4px; font-size: 0.8rem; }
+    .injured { color: var(--accent-red); font-weight: bold; }
+    select, input { padding: 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--panel); }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal { background: var(--panel); border: 2px solid var(--border); border-radius: 8px; padding: 20px; max-width: 500px; width: 90%; }
+    .modal h2 { margin-top: 0; color: var(--accent-red); }
+    .map-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      aspect-ratio: 16 / 10;
+      background: #f9f1dc;
+      margin: 0 auto;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .map-inner {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+    }
+    .map-lines {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 1;
+    }
+    .map-node {
+      position: absolute;
+      width: 56px;
+      padding: 3px 1px;
+      margin-left: -28px;
+      margin-top: -12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 1.5px solid var(--border);
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.15s;
+      box-shadow: 0 1px 4px rgba(61,43,31,0.18);
+      background: var(--panel);
+      z-index: 2;
+      white-space: nowrap;
+    }
+    .map-node:hover { transform: scale(1.08); z-index: 3; background: #f0dcc0; }
+    .map-node .n-name { font-size: 0.72rem; color: var(--text); }
+    .map-node .n-troops { font-size: 0.6rem; color: var(--muted); }
+    .map-region-label {
+      position: absolute;
+      font-size: 1rem;
+      color: rgba(139,69,19,0.3);
+      font-weight: bold;
+      letter-spacing: 3px;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .map-node:hover { transform: scale(1.1); }
+    .map-node .n-name { font-size: 0.8rem; color: var(--text); }
+    .map-node .n-troops { font-size: 0.65rem; color: var(--muted); }
+    .map-line {
+      position: absolute;
+      height: 2px;
+      background: #a07c5a;
+      transform-origin: left center;
+      z-index: 1;
+    }
+    .map-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+    .map-region-label {
+      position: absolute;
+      font-size: 0.9rem;
+      color: #a07c5a;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      z-index: 0;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>三国风云·轻量 SLG</h1>
+    <div class="top-resources">
+      <span id="h-res"></span>
+      <span id="h-date"></span>
+      <span id="h-season"></span>
+    </div>
+  </header>
+  <div class="main">
+    <aside id="sidebar"></aside>
+    <div id="content"></div>
+  </div>
+  <div id="log-panel"><h3>事件日志</h3><div id="logs"></div></div>
+</div>
+<div class="modal-overlay" id="modal"><div class="modal" id="modal-content"></div></div>
+<script>
+(() => {
+  const SEASONS = ['春','夏','秋','冬'];
+  const TROOP_TYPES = {
+    infantry: { name: '步兵', atk: 1.0, def: 1.0, food: 1.0 },
+    cavalry: { name: '骑兵', atk: 1.2, def: 1.0, food: 1.5 },
+    archer: { name: '弓兵', atk: 1.0, def: 1.0, food: 1.1, siegeAtk: 1.15 }
+  };
+  const SKILL_NAMES = {
+    wusheng:'武圣', paoxiao:'咆哮', longdan:'龙胆', shensuan:'神算', jianxiong:'奸雄',
+    qixi:'奇袭', lianying:'连营', baonu:'暴怒', tianming:'天命', huoji:'火计'
+  };
+  const SKILLS = {
+    wusheng: { name: '武圣', desc: '武力+20%', battle: (a,d) => { a.forceMul*=1.2; } },
+    paoxiao: { name: '咆哮', desc: '敌方士气-15%', battle: (a,d) => { d.moraleMul*=0.85; } },
+    longdan: { name: '龙胆', desc: '受伤概率降低50%', wound: 0.5 },
+    shensuan: { name: '神算', desc: '敌方防御-20%', battle: (a,d) => { d.defMul*=0.8; } },
+    jianxiong: { name: '奸雄', desc: '战胜后获得双倍金钱', rewardGold: 2 },
+    qixi: { name: '奇袭', desc: '首回合攻击+30%', battle: (a,d) => { a.atkMul*=1.3; } },
+    lianying: { name: '连营', desc: '防守时城防+20%', defend: 0.2 },
+    baonu: { name: '暴怒', desc: '武力+25%，受伤概率+20%', battle: (a,d) => { a.forceMul*=1.25; a.woundExtra=0.2; } },
+    tianming: { name: '天命', desc: '民心衰减减半', moraleDecay: 0.5 },
+    huoji: { name: '火计', desc: '攻城时守军额外损失10%', fire: 0.1 }
+  };
+
+  function makeGenerals() {
+    const data = [
+      ['刘备','liu',75,78,80,95,'tianming'],
+      ['关羽','liu',97,75,95,62,'wusheng'],
+      ['张飞','liu',96,30,85,35,'paoxiao'],
+      ['赵云','liu',96,76,90,65,'longdan'],
+      ['诸葛亮','liu',38,100,92,100,'shensuan'],
+      ['曹操','cao',72,91,95,92,'jianxiong'],
+      ['夏侯惇','cao',90,65,88,55,''],
+      ['夏侯渊','cao',88,60,86,50,''],
+      ['许褚','cao',94,35,78,30,''],
+      ['典韦','cao',95,32,75,28,''],
+      ['郭嘉','cao',26,98,75,88,''],
+      ['司马懿','cao',55,97,92,90,''],
+      ['荀彧','cao',30,95,70,98,''],
+      ['张辽','cao',92,78,91,68,'qixi'],
+      ['徐晃','cao',89,72,87,62,''],
+      ['孙权','sun',65,82,78,88,''],
+      ['周瑜','sun',70,97,95,85,'huoji'],
+      ['陆逊','sun',62,96,94,84,'lianying'],
+      ['甘宁','sun',92,68,85,50,''],
+      ['太史慈','sun',93,65,84,52,''],
+      ['黄盖','sun',82,60,80,58,''],
+      ['吕蒙','sun',85,89,88,78,''],
+      ['周泰','sun',88,45,82,40,''],
+      ['鲁肃','sun',45,88,75,92,''],
+      ['袁绍','yuan',65,55,72,70,''],
+      ['颜良','yuan',93,40,85,45,''],
+      ['文丑','yuan',92,38,84,43,''],
+      ['田丰','yuan',30,91,72,88,''],
+      ['沮授','yuan',28,90,70,86,''],
+      ['吕布','lv',100,30,92,25,'baonu'],
+      ['貂蝉','lv',35,80,40,70,''],
+      ['陈宫','lv',40,89,78,82,''],
+      ['高顺','lv',86,58,84,55,''],
+      ['庞统','free',35,97,80,88,'shensuan'],
+      ['黄忠','free',93,62,85,55,''],
+      ['马超','free',96,48,88,45,''],
+      ['魏延','free',90,55,82,50,'']
+    ];
+    return data.map(([n,f,fo,i,c,p,s],idx)=>({id:idx,name:n,faction:f,force:fo,intelligence:i,command:c,politics:p,loyalty:f==='free'?60:85,skill:s||null,injured:0,injuredTurns:0}));
+  }
+
+  function makeCities() {
+    // 46 cities covering the full Three Kingdoms map
+    const data = [
+      // 北方 (North)
+      {name:'邺城',owner:'yuan',troops:2200,defense:1.2,food:120,money:90,morale:70,neighbors:['平原','南皮','邯郸','许昌','洛阳'],region:'北方',x:1280,y:560},
+      {name:'平原',owner:'yuan',troops:1800,defense:1.0,food:100,money:70,morale:65,neighbors:['邺城','南皮','北海','陈留','许昌'],region:'北方',x:1480,y:500},
+      {name:'南皮',owner:'yuan',troops:1600,defense:1.0,food:90,money:60,morale:65,neighbors:['邺城','平原','北海','蓟'],region:'北方',x:1500,y:340},
+      {name:'蓟',owner:'yuan',troops:1500,defense:1.1,food:80,money:50,morale:60,neighbors:['南皮','北平'],region:'北方',x:1480,y:180},
+      {name:'北平',owner:'yuan',troops:1400,defense:1.0,food:70,money:45,morale:60,neighbors:['蓟','襄平'],region:'北方',x:1680,y:180},
+      {name:'襄平',owner:null,troops:1300,defense:1.0,food:60,money:40,morale:55,neighbors:['北平'],region:'北方',x:1880,y:220},
+      {name:'邯郸',owner:'cao',troops:1700,defense:1.1,food:90,money:70,morale:70,neighbors:['邺城','濮阳','许昌'],region:'北方',x:1240,y:700},
+      {name:'濮阳',owner:'cao',troops:1800,defense:1.1,food:100,money:80,morale:70,neighbors:['邯郸','陈留','小沛','北海'],region:'北方',x:1400,y:680},
+      {name:'北海',owner:'cao',troops:1600,defense:1.1,food:90,money:70,morale:70,neighbors:['平原','南皮','濮阳','徐州'],region:'北方',x:1620,y:620},
+      {name:'许昌',owner:'cao',troops:2400,defense:1.3,food:110,money:120,morale:75,neighbors:['邺城','平原','陈留','洛阳','小沛','邯郸'],region:'北方',x:1260,y:820},
+      {name:'陈留',owner:'cao',troops:2000,defense:1.1,food:100,money:100,morale:70,neighbors:['平原','许昌','濮阳','小沛','徐州'],region:'北方',x:1440,y:800},
+      {name:'洛阳',owner:'cao',troops:2100,defense:1.4,food:90,money:130,morale:80,neighbors:['邺城','许昌','长安','汉中','弘农'],region:'北方',x:1040,y:840},
+      {name:'弘农',owner:'cao',troops:1500,defense:1.1,food:80,money:70,morale:70,neighbors:['洛阳','长安','武关'],region:'北方',x:1040,y:980},
+      {name:'长安',owner:'cao',troops:2000,defense:1.3,food:90,money:100,morale:75,neighbors:['洛阳','弘农','天水','汉中','武关'],region:'北方',x:860,y:900},
+      {name:'武关',owner:null,troops:1200,defense:1.0,food:60,money:50,morale:55,neighbors:['弘农','长安','上庸','襄阳'],region:'北方',x:980,y:1060},
+      // 中原 (Central)
+      {name:'小沛',owner:'liu',troops:1500,defense:1.0,food:90,money:80,morale:75,neighbors:['许昌','陈留','濮阳','徐州','下邳'],region:'中原',x:1580,y:820},
+      {name:'徐州',owner:'lv',troops:1900,defense:1.1,food:100,money:90,morale:60,neighbors:['陈留','小沛','下邳','寿春','北海'],region:'中原',x:1720,y:760},
+      {name:'下邳',owner:'lv',troops:1700,defense:1.2,food:95,money:85,morale:60,neighbors:['小沛','徐州','寿春','广陵'],region:'中原',x:1740,y:920},
+      {name:'广陵',owner:'lv',troops:1400,defense:1.0,food:80,money:70,morale:60,neighbors:['下邳','寿春','建业'],region:'中原',x:1840,y:840},
+      {name:'寿春',owner:'sun',troops:1800,defense:1.1,food:110,money:100,morale:70,neighbors:['徐州','下邳','广陵','扬州','汝南'],region:'中原',x:1660,y:1040},
+      {name:'汝南',owner:'sun',troops:1500,defense:1.0,food:90,money:80,morale:70,neighbors:['寿春','江夏','襄阳'],region:'中原',x:1480,y:1000},
+      // 南方 (South)
+      {name:'扬州',owner:'sun',troops:1600,defense:1.0,food:120,money:110,morale:75,neighbors:['寿春','建业','江夏','庐江'],region:'南方',x:1760,y:1160},
+      {name:'庐江',owner:'sun',troops:1500,defense:1.0,food:100,money:90,morale:70,neighbors:['扬州','建业','柴桑'],region:'南方',x:1640,y:1160},
+      {name:'建业',owner:'sun',troops:2000,defense:1.3,food:130,money:120,morale:80,neighbors:['广陵','扬州','庐江','吴','柴桑'],region:'南方',x:1780,y:1280},
+      {name:'吴',owner:'sun',troops:1600,defense:1.1,food:110,money:100,morale:75,neighbors:['建业','会稽'],region:'南方',x:1900,y:1260},
+      {name:'会稽',owner:'sun',troops:1500,defense:1.0,food:100,money:90,morale:75,neighbors:['吴','建安'],region:'南方',x:1960,y:1400},
+      {name:'建安',owner:null,troops:1300,defense:1.0,food:90,money:70,morale:60,neighbors:['会稽'],region:'南方',x:1840,y:1480},
+      {name:'柴桑',owner:'sun',troops:1700,defense:1.1,food:120,money:100,morale:75,neighbors:['庐江','建业','江夏','长沙','豫章'],region:'南方',x:1560,y:1260},
+      {name:'豫章',owner:'sun',troops:1400,defense:1.0,food:100,money:80,morale:70,neighbors:['柴桑','长沙'],region:'南方',x:1600,y:1380},
+      {name:'江夏',owner:'sun',troops:1600,defense:1.0,food:110,money:95,morale:70,neighbors:['汝南','扬州','柴桑','襄阳','长沙'],region:'南方',x:1420,y:1160},
+      {name:'长沙',owner:'sun',troops:1500,defense:1.0,food:120,money:100,morale:70,neighbors:['江夏','柴桑','豫章','武陵','桂阳'],region:'南方',x:1420,y:1320},
+      {name:'桂阳',owner:null,troops:1300,defense:1.0,food:100,money:80,morale:60,neighbors:['长沙','武陵','零陵'],region:'南方',x:1320,y:1420},
+      {name:'零陵',owner:null,troops:1200,defense:1.0,food:90,money:70,morale:60,neighbors:['桂阳','武陵'],region:'南方',x:1200,y:1460},
+      {name:'武陵',owner:null,troops:1400,defense:1.1,food:110,money:90,morale:60,neighbors:['长沙','桂阳','零陵','荆州','永安'],region:'南方',x:1220,y:1260},
+      {name:'荆州',owner:null,troops:1500,defense:1.2,food:140,money:110,morale:60,neighbors:['江夏','武陵','襄阳','永安','汉中','武关'],region:'南方',x:1180,y:1080},
+      {name:'襄阳',owner:'cao',troops:2000,defense:1.3,food:110,money:100,morale:75,neighbors:['汝南','江夏','荆州','武关','上庸','新野'],region:'南方',x:1180,y:960},
+      {name:'新野',owner:'cao',troops:1500,defense:1.1,food:90,money:80,morale:70,neighbors:['襄阳','上庸'],region:'南方',x:1280,y:900},
+      {name:'上庸',owner:'cao',troops:1400,defense:1.0,food:80,money:70,morale:70,neighbors:['武关','新野','襄阳','汉中'],region:'南方',x:1100,y:860},
+      // 西蜀 (West)
+      {name:'汉中',owner:'cao',troops:1800,defense:1.2,food:110,money:90,morale:70,neighbors:['洛阳','长安','上庸','荆州','成都','梓潼'],region:'西蜀',x:900,y:1020},
+      {name:'梓潼',owner:'liu',troops:1400,defense:1.1,food:100,money:80,morale:70,neighbors:['汉中','成都','永安'],region:'西蜀',x:760,y:1040},
+      {name:'成都',owner:'liu',troops:1400,defense:1.3,food:150,money:100,morale:80,neighbors:['汉中','梓潼','永安','江州','云南'],region:'西蜀',x:600,y:1080},
+      {name:'永安',owner:'liu',troops:1300,defense:1.1,food:100,money:80,morale:75,neighbors:['荆州','武陵','梓潼','成都','江州'],region:'西蜀',x:980,y:1200},
+      {name:'江州',owner:'liu',troops:1200,defense:1.0,food:110,money:80,morale:75,neighbors:['成都','永安','云南','建宁'],region:'西蜀',x:700,y:1200},
+      {name:'建宁',owner:null,troops:1100,defense:1.0,food:100,money:70,morale:60,neighbors:['江州','云南'],region:'西蜀',x:680,y:1360},
+      {name:'云南',owner:null,troops:1100,defense:1.0,food:90,money:60,morale:60,neighbors:['成都','江州','建宁'],region:'西蜀',x:540,y:1320},
+      // 西凉 (Northwest)
+      {name:'天水',owner:null,troops:1400,defense:1.1,food:70,money:50,morale:60,neighbors:['长安','安定','武威'],region:'西凉',x:740,y:820},
+      {name:'安定',owner:null,troops:1200,defense:1.0,food:60,money:45,morale:60,neighbors:['天水','长安'],region:'西凉',x:920,y:760},
+      {name:'武威',owner:null,troops:1300,defense:1.1,food:50,money:40,morale:55,neighbors:['天水'],region:'西凉',x:560,y:700}
+    ];
+    return data;
+  }
+
+  function makeFactions() {
+    return {
+      liu: {id:'liu',name:'刘备',color:'#c41e3a',leader:'刘备',personality:'player',ai:false,food:1000,gold:800,troops:500,morale:80,allies:[]},
+      cao: {id:'cao',name:'曹操',color:'#1a5c1a',leader:'曹操',personality:'expansion',ai:true,food:1800,gold:1500,troops:1000,morale:80,allies:[]},
+      sun: {id:'sun',name:'孙权',color:'#2980b9',leader:'孙权',personality:'diplomatic',ai:true,food:1600,gold:1400,troops:900,morale:80,allies:[]},
+      yuan: {id:'yuan',name:'袁绍',color:'#8e44ad',leader:'袁绍',personality:'expansion',ai:true,food:1400,gold:900,troops:800,morale:75,allies:[]},
+      lv: {id:'lv',name:'吕布',color:'#e67e22',leader:'吕布',personality:'expansion',ai:true,food:1000,gold:800,troops:700,morale:60,allies:[]}
+    };
+  }
+
+  let state;
+  let selectedTab = 'internal';
+
+  function initState() {
+    const factions = makeFactions();
+    const cities = makeCities();
+    const generals = makeGenerals();
+    const relations = {};
+    const ids = Object.keys(factions);
+    ids.forEach(a=>{relations[a]={};ids.forEach(b=>{relations[a][b]=a===b?100:(factions[a].ai&&factions[b].ai?30:20);});});
+    state = {
+      factions, cities, generals,
+      relations,
+      year: 1, month: 1, turn: 1,
+      playerId: 'liu',
+      logs: [],
+      gameOver: false,
+      winner: null,
+      tech: {farmBonus:0,commBonus:0,recruitBonus:0},
+      eventsTriggered: {},
+      yellowTurban: false,
+      armies: [],
+      nextArmyId: 1
+    };
+    log('游戏开始！公元190年，乱世群雄并起。');
+    renderAll();
+  }
+
+  function getSeason() { return SEASONS[(state.month-1)%4]; }
+  function player() { return state.factions[state.playerId]; }
+  function factionCities(fid) { return state.cities.filter(c=>c.owner===fid); }
+  function factionGenerals(fid) { return state.generals.filter(g=>g.faction===fid); }
+  function findCity(name) { return state.cities.find(c=>c.name===name); }
+  function findGeneral(name) { return state.generals.find(g=>g.name===name); }
+  function relation(a,b) { return state.relations[a][b]; }
+  function setRelation(a,b,v) { state.relations[a][b]=state.relations[b][a]=Math.max(-100,Math.min(100,v)); }
+  function factionArmies(fid) { return state.armies.filter(a=>a.faction===fid); }
+  function findArmy(id) { return state.armies.find(a=>a.id===id); }
+  function armyTroopTotal(a) { return a.infantry + a.cavalry + a.archer; }
+  function availableGenerals(fid, armyId=null) {
+    return state.generals.filter(g=>g.faction===fid && !g.injured && !state.armies.some(ar=>ar.id!==armyId && ar.generals.includes(g.name)));
+  }
+
+  function log(msg) {
+    state.logs.unshift(`[${state.year}年${state.month}月] ${msg}`);
+    if(state.logs.length>50) state.logs.pop();
+    renderLogs();
+  }
+
+  function renderLogs() {
+    const el = document.getElementById('logs');
+    el.innerHTML = state.logs.slice(0,20).map(m=>`<div class="log-entry">${m}</div>`).join('');
+  }
+
+  function renderHeader() {
+    const p = player();
+    document.getElementById('h-res').innerHTML = `
+      <span class="res-item" style="color:#1a5c1a">粮食:${Math.floor(p.food)}</span>
+      <span class="res-item" style="color:#b8860b">金钱:${Math.floor(p.gold)}</span>
+      <span class="res-item" style="color:#c41e3a">兵力:${Math.floor(p.troops)}</span>
+      <span class="res-item">士气:${Math.floor(p.morale)}</span>`;
+    document.getElementById('h-date').innerText = `第${state.year}年 ${state.month}月 第${state.turn}回合`;
+    document.getElementById('h-season').innerHTML = `季节:<b>${getSeason()}</b>`;
+  }
+
+  function renderSidebar() {
+    const tabs = [
+      {id:'internal',label:'内政'},
+      {id:'military',label:'军事'},
+      {id:'talent',label:'人才'},
+      {id:'diplomacy',label:'外交'},
+      {id:'map',label:'地图'},
+      {id:'logs',label:'日志'}
+    ];
+    const sb = document.getElementById('sidebar');
+    sb.innerHTML = tabs.map(t=>`<button class="${selectedTab===t.id?'active':''}" onclick="window.switchTab('${t.id}')">${t.label}</button>`).join('') +
+      `<hr style="width:100%;border-color:var(--border)">` +
+      `<button onclick="window.saveGame()">保存游戏</button>` +
+      `<button onclick="window.loadGame()">读取游戏</button>` +
+      `<button onclick="window.nextTurn()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">结束回合</button>`;
+  }
+
+  window.switchTab = (id)=>{ selectedTab=id; renderContent(); renderSidebar(); };
+
+  function renderContent() {
+    const c = document.getElementById('content');
+    if(state.gameOver) { c.innerHTML = `<div class="card"><h2>${state.winner===state.playerId?'恭喜统一天下！':'游戏失败'}'}</h2><button class="action" onclick="window.initGame()">重新开始</button></div>`; return; }
+    switch(selectedTab){
+      case 'internal': renderInternal(c); break;
+      case 'military': renderMilitary(c); break;
+      case 'talent': renderTalent(c); break;
+      case 'diplomacy': renderDiplomacy(c); break;
+      case 'map': renderMap(c); break;
+      case 'logs': renderLogPage(c); break;
+    }
+  }
+
+  function renderInternal(c) {
+    const p = player();
+    const season = getSeason();
+    c.innerHTML = `
+      <div class="card"><h3>内政中心 · 当前季节：${season}</h3>
+      <p>拥有城池：${factionCities(state.playerId).length}座 · 武将：${factionGenerals(state.playerId).length}人</p>
+      <button class="action" onclick="window.doInternal('farm')" ${p.gold<200?'disabled':''}>开垦农田 (200金)</button>
+      <button class="action" onclick="window.doInternal('comm')" ${p.gold<200?'disabled':''}>发展商业 (200金)</button>
+      <button class="action" onclick="window.doInternal('recruit')" ${p.gold<150||p.food<200?'disabled':''}>招兵买马 (150金+200粮)</button>
+      <button class="action" onclick="window.doInternal('search')" ${p.gold<300?'disabled':''}>寻访人才 (300金)</button>
+      <button class="action" onclick="window.doInternal('heal')" ${p.gold<200||!factionGenerals(state.playerId).some(g=>g.injured)?'disabled':''}>医治伤员 (200金)</button>
+      <button class="action" onclick="window.doInternal('morale')" ${p.gold<150?'disabled':''}>提升民心 (150金)</button>
+      <button class="action" onclick="window.doInternal('tech')" ${p.gold<500?'disabled':''}>研发科技 (500金)</button>
+      </div>
+      <div class="card"><h3>城池产出</h3>
+      <table><tr><th>城池</th><th>粮食产出</th><th>金钱产出</th><th>民心</th><th>守军</th></tr>
+      ${factionCities(state.playerId).map(city=>`<tr><td>${city.name}</td><td>${city.food}</td><td>${city.money}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td></tr>`).join('')}
+      </table></div>`;
+  }
+
+  window.doInternal = (type)=>{
+    const p = player();
+    const cities = factionCities(state.playerId);
+    if(type==='farm' && p.gold>=200){
+      p.gold-=200; cities.forEach(c=>c.food+=15); log('开垦农田，各城粮食产出+15');
+    }else if(type==='comm' && p.gold>=200){
+      p.gold-=200; cities.forEach(c=>c.money+=12); log('发展商业，各城金钱产出+12');
+    }else if(type==='recruit' && p.gold>=150 && p.food>=200){
+      p.gold-=150; p.food-=200; const add = Math.floor(100+Math.random()*101+state.tech.recruitBonus); p.troops+=add; log(`招兵买马，兵力+${add}`);
+    }else if(type==='search' && p.gold>=300){
+      p.gold-=300;
+      if(Math.random()<0.4){
+        const pool = state.generals.filter(g=>g.faction==='free');
+        if(pool.length){
+          const g = pool[Math.floor(Math.random()*pool.length)];
+          g.faction=state.playerId; g.loyalty=70;
+          log(`寻访到人才 ${g.name}，已加入麾下！`);
+        }else log('寻访未果。');
+      }else log('寻访未果。');
+    }else if(type==='heal' && p.gold>=200){
+      p.gold-=200; factionGenerals(state.playerId).forEach(g=>{g.injured=0;g.injuredTurns=0;}); log('医治伤员，所有武将恢复健康');
+    }else if(type==='morale' && p.gold>=150){
+      p.gold-=150; cities.forEach(c=>c.morale=Math.min(100,c.morale+10)); log('提升民心，各城民心+10');
+    }else if(type==='tech' && p.gold>=500){
+      p.gold-=500; const r=Math.random();
+      if(r<0.33){state.tech.farmBonus+=10;log('研发农业科技，粮食产出额外+10/城');}
+      else if(r<0.66){state.tech.commBonus+=8;log('研发商业科技，金钱产出额外+8/城');}
+      else {state.tech.recruitBonus+=30;log('研发募兵科技，招兵额外+30');}
+    }
+    renderAll();
+  };
+
+  function renderMilitary(c) {
+    const p = player();
+    const pcities = factionCities(state.playerId);
+    const myArmies = factionArmies(state.playerId);
+    const availableGens = availableGenerals(state.playerId);
+
+    let html = `<div class="card"><h3>军团管理</h3>`;
+    html += `<p>可用兵力：${Math.floor(p.troops)} · 可用武将：${availableGens.length}人 · 军团上限：${pcities.length}</p>`;
+    html += `<button class="action" onclick="window.openArmyEditor()">组建新军团</button>`;
+    html += `</div>`;
+
+    html += `<div class="card"><h3>我的军团</h3>`;
+    if (myArmies.length === 0) {
+      html += `<p>暂无军团，请组建军团后出征。</p>`;
+    } else {
+      html += `<table><tr><th>军团</th><th>驻扎</th><th>主将</th><th>将领</th><th>步兵</th><th>骑兵</th><th>弓兵</th><th>总兵力</th><th>操作</th></tr>`;
+      myArmies.forEach(a => {
+        const main = a.generals.length ? a.generals[0] : '-';
+        html += `<tr>
+          <td>${a.name}</td>
+          <td>${a.city || '待命'}</td>
+          <td>${main}</td>
+          <td>${a.generals.join(', ') || '-'}</td>
+          <td>${a.infantry}</td><td>${a.cavalry}</td><td>${a.archer}</td>
+          <td>${armyTroopTotal(a)}</td>
+          <td>
+            <button class="action" onclick="window.openArmyEditor(${a.id})">调整</button>
+            <button class="action" onclick="window.disbandArmy(${a.id})">解散</button>
+          </td>
+        </tr>`;
+      });
+      html += `</table>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="card"><h3>派军团出征</h3>`;
+    if (myArmies.length === 0 || pcities.length === 0) {
+      html += `<p>无可用军团或城池。</p>`;
+    } else {
+      html += `<div style="margin:8px 0">
+        <label>军团：</label><select id="atk-army">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
+        <label> 目标城：</label><select id="atk-to"><option>请先选军团</option></select>
+        <button class="action" onclick="window.doArmyAttack()">出征</button>
+      </div>`;
+      html += `<div id="atk-preview"></div>`;
+    }
+    html += `</div>`;
+
+    c.innerHTML = html;
+
+    const armySel = document.getElementById('atk-army');
+    const toSel = document.getElementById('atk-to');
+    if (armySel && toSel) {
+      const updateTargets = () => {
+        const army = findArmy(parseInt(armySel.value));
+        const fromCity = army && army.city ? findCity(army.city) : pcities[0];
+        if (!fromCity) { toSel.innerHTML = '<option>无出发城池</option>'; return; }
+        const opts = fromCity.neighbors.map(n => {
+          const t = findCity(n);
+          if (!t) return '';
+          return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
+        }).join('');
+        toSel.innerHTML = opts || '<option>无相邻目标</option>';
+      };
+      armySel.addEventListener('change', updateTargets);
+      updateTargets();
+    }
+  }
+
+  window.doAttack = ()=>{
+    if(state.gameOver) return;
+    const p = player();
+    const gName = document.getElementById('atk-gen').value;
+    const fromName = document.getElementById('atk-from').value;
+    const toName = document.getElementById('atk-to').value;
+    const troopType = document.getElementById('atk-troop').value;
+    const num = parseInt(document.getElementById('atk-num').value);
+    const general = findGeneral(gName);
+    const fromCity = findCity(fromName);
+    const target = findCity(toName);
+    if(!general||!target||!fromCity) { alert('请选择有效目标'); return; }
+    if(target.owner===state.playerId) { alert('不能攻击己方城池'); return; }
+    if(target.owner && relation(state.playerId,target.owner)>=80) { alert('不能攻击盟友'); return; }
+    if(!fromCity.neighbors.includes(target.name)) { alert('目标不相邻'); return; }
+    if(general.injured) { alert('武将受伤中'); return; }
+    if(num<100 || num>p.troops) { alert('兵力不足或无效'); return; }
+    if(target.owner) setRelation(state.playerId,target.owner,-100);
+    battle(state.playerId, target.owner||'neutral', general, num, target, troopType);
+    renderAll();
+  };
+
+  window.doArmyAttack = ()=>{
+    if(state.gameOver) return;
+    const armyId = parseInt(document.getElementById('atk-army').value);
+    const toName = document.getElementById('atk-to').value;
+    const army = findArmy(armyId);
+    const target = findCity(toName);
+    if(!army || !target) { alert('请选择有效军团和目标'); return; }
+    if(target.owner===state.playerId) { alert('不能攻击己方城池'); return; }
+    if(target.owner && relation(state.playerId,target.owner)>=80) { alert('不能攻击盟友'); return; }
+    const fromCity = army.city ? findCity(army.city) : factionCities(state.playerId)[0];
+    if(!fromCity || !fromCity.neighbors.includes(target.name)) { alert('目标不相邻'); return; }
+    if(armyTroopTotal(army)<100) { alert('军团兵力不足'); return; }
+    const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
+    if(mainGeneral && mainGeneral.injured) { alert('主将受伤中'); return; }
+    if(target.owner) setRelation(state.playerId,target.owner,-100);
+    armyBattle(state.playerId, target.owner||'neutral', army, target);
+    renderAll();
+  };
+
+  function armyBattle(attackerId, defenderId, army, targetCity) {
+    const total = armyTroopTotal(army);
+    const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
+    const atkFaction = state.factions[attackerId];
+    // Aggregate attack from all troop types
+    let attack = 0;
+    [['infantry',army.infantry],['cavalry',army.cavalry],['archer',army.archer]].forEach(([typeKey,troops])=>{
+      if(troops<=0) return;
+      const tt = TROOP_TYPES[typeKey];
+      let base = troops * (0.5 + (mainGeneral?mainGeneral.force:50)/200) * (0.5 + (mainGeneral?mainGeneral.command:50)/200) * tt.atk;
+      if(typeKey==='archer') base *= tt.siegeAtk;
+      attack += base;
+    });
+    // General skills apply to aggregate attack
+    let aMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
+    let dMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
+    if(mainGeneral && mainGeneral.skill && SKILLS[mainGeneral.skill] && typeof SKILLS[mainGeneral.skill].battle==='function') SKILLS[mainGeneral.skill].battle(aMods,dMods);
+    attack *= aMods.forceMul * aMods.atkMul;
+
+    const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
+    if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
+
+    let defense = targetCity.troops * 1.2 * targetCity.defense * dMods.defMul * (0.8+Math.random()*0.4);
+    if(defGeneral) defense *= (0.5 + defGeneral.command/200);
+    if(defGeneral && defGeneral.skill==='lianying') defense *= 1.2;
+    if(state.eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && state.factions.sun.allies.includes('liu')) attack*=0.7;
+
+    const victory = attack > defense;
+    if(victory){
+      let losses = Math.floor(total * 0.25);
+      const ratio = Math.max(0, (total - losses) / total);
+      army.infantry = Math.floor(army.infantry * ratio);
+      army.cavalry = Math.floor(army.cavalry * ratio);
+      army.archer = Math.floor(army.archer * ratio);
+      targetCity.troops = Math.floor((total - losses)/2);
+      const oldOwner = targetCity.owner;
+      targetCity.owner = attackerId;
+      targetCity.morale = Math.max(30, targetCity.morale - 20);
+      army.city = targetCity.name;
+      atkFaction.gold += defGeneral && defGeneral.skill==='jianxiong'?400:200;
+      if(mainGeneral && mainGeneral.skill==='huoji') targetCity.troops = Math.floor(targetCity.troops*0.9);
+      log(`${atkFaction.name} 的 ${army.name}(${mainGeneral?mainGeneral.name:'无将'}) 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
+      if(oldOwner && state.factions[oldOwner] && factionCities(oldOwner).length===0) log(`${state.factions[oldOwner].name} 势力灭亡！`);
+    }else{
+      let losses = Math.floor(total * 0.4);
+      const ratio = Math.max(0, (total - losses) / total);
+      army.infantry = Math.floor(army.infantry * ratio);
+      army.cavalry = Math.floor(army.cavalry * ratio);
+      army.archer = Math.floor(army.archer * ratio);
+      targetCity.troops = Math.floor(targetCity.troops * 0.85);
+      if(mainGeneral){
+        let woundChance = 0.3 + aMods.woundExtra;
+        if(Math.random()<woundChance){ mainGeneral.injured=1; mainGeneral.injuredTurns=1+Math.floor(Math.random()*2); log(`${mainGeneral.name} 受伤，需休养 ${mainGeneral.injuredTurns} 月`); }
+      }
+      log(`${atkFaction.name} 的 ${army.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
+    }
+  }
+
+  function battle(attackerId, defenderId, general, atkTroops, targetCity, troopTypeKey) {
+    const atkFaction = state.factions[attackerId];
+    const troopType = TROOP_TYPES[troopTypeKey];
+    const defTroops = targetCity.troops;
+    let aMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
+    let dMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
+    if(general && general.skill && SKILLS[general.skill] && typeof SKILLS[general.skill].battle === 'function') SKILLS[general.skill].battle(aMods,dMods);
+    const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
+    if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle === 'function') SKILLS[defGeneral.skill].battle(dMods,aMods);
+    let attack = atkTroops * (0.5 + general.force/200 * aMods.forceMul) * (0.5 + general.command/200) * troopType.atk * aMods.atkMul;
+    // Counter bonus
+    const defTroopTypeKey = 'infantry';
+    if(troopTypeKey==='cavalry' && defTroopTypeKey==='archer') attack*=1.2;
+    if(troopTypeKey==='archer' && defTroopTypeKey==='infantry') attack*=1.2;
+    if(troopTypeKey==='infantry' && defTroopTypeKey==='cavalry') attack*=1.2;
+    // Siege bonus for archer
+    if(troopTypeKey==='archer') attack *= troopType.siegeAtk;
+    let defense = defTroops * 1.2 * targetCity.defense * dMods.defMul * (0.8+Math.random()*0.4);
+    if(defGeneral) defense *= (0.5 + defGeneral.command/200);
+    if(defGeneral && defGeneral.skill==='lianying') defense *= 1.2;
+    // Red Cliff special
+    if(state.eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && state.factions.sun.allies.includes('liu')) attack*=0.7;
+
+    let victory = attack > defense;
+    if(victory){
+      let losses = Math.floor(atkTroops * 0.25);
+      atkFaction.troops -= losses;
+      targetCity.troops = Math.floor((atkTroops - losses)/2);
+      const oldOwner = targetCity.owner;
+      targetCity.owner = attackerId;
+      targetCity.morale = Math.max(30, targetCity.morale - 20);
+      atkFaction.gold += defGeneral && defGeneral.skill==='jianxiong'?400:200;
+      if(general.skill==='huoji') targetCity.troops = Math.floor(targetCity.troops*0.9);
+      log(`${atkFaction.name} 的 ${general.name} 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
+      if(oldOwner && state.factions[oldOwner]){
+        const old = state.factions[oldOwner];
+        if(factionCities(oldOwner).length===0) log(`${old.name} 势力灭亡！`);
+      }
+    }else{
+      let losses = Math.floor(atkTroops * 0.4);
+      atkFaction.troops -= losses;
+      targetCity.troops = Math.floor(defTroops * 0.85);
+      let woundChance = 0.3 + aMods.woundExtra;
+      if(Math.random()<woundChance){ general.injured=1; general.injuredTurns=1+Math.floor(Math.random()*2); log(`${general.name} 受伤，需休养 ${general.injuredTurns} 月`); }
+      log(`${atkFaction.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
+    }
+  }
+
+  function renderTalent(c) {
+    const p = player();
+    const myGens = factionGenerals(state.playerId);
+    const enemyGens = state.generals.filter(g=>g.faction!=='free'&&g.faction!==state.playerId&&g.loyalty<30);
+    c.innerHTML = `
+      <div class="card"><h3>人才招募</h3>
+      <button class="action" onclick="window.doInternal('search')" ${p.gold<300?'disabled':''}>寻访人才 (300金)</button>
+      <p>在野武将可通过寻访加入。敌方忠诚度低于30的武将可招降。</p>
+      </div>
+      <div class="card"><h3>可招降武将</h3>
+      ${enemyGens.length?enemyGens.map(g=>`<div style="margin:4px 0">${g.name} (${state.factions[g.faction].name}) 忠诚${g.loyalty} <button class="action" onclick="window.recruitGeneral('${g.name}')" ${p.gold<500?'disabled':''}>招降 (500金)</button></div>`).join(''):'<p>当前没有可招降武将</p>'}
+      </div>
+      <div class="card"><h3>我方武将</h3>
+      <table><tr><th>姓名</th><th>武力</th><th>智力</th><th>统率</th><th>政治</th><th>忠诚</th><th>特技</th><th>状态</th></tr>
+      ${myGens.map(g=>`<tr><td>${g.name}</td><td>${g.force}</td><td>${g.intelligence}</td><td>${g.command}</td><td>${g.politics}</td><td>${g.loyalty}</td><td>${g.skill?SKILL_NAMES[g.skill]||'':'-'}</td><td>${g.injured?'<span class="injured">受伤'+g.injuredTurns+'月</span>':'健康'}</td></tr>`).join('')}
+      </table></div>`;
+  }
+
+  window.recruitGeneral = (name)=>{
+    const g = findGeneral(name);
+    const p = player();
+    if(g && p.gold>=500){
+      p.gold-=500; g.faction=state.playerId; g.loyalty=70;
+      log(`成功招降 ${g.name}！`);
+      renderAll();
+    }
+  };
+
+  window.openArmyEditor = (armyId=null)=>{
+    const p = player();
+    const army = armyId ? findArmy(armyId) : null;
+    const pcities = factionCities(state.playerId);
+    const availableGens = availableGenerals(state.playerId, armyId);
+    const maxArmies = pcities.length;
+    const currentCount = factionArmies(state.playerId).length;
+    if(!army && currentCount>=maxArmies){ alert('军团数量已达城池数量上限'); return; }
+
+    const currentGens = army ? army.generals : [];
+    const unselectedGens = availableGens.map(g=>g.name);
+    const allSelectable = [...new Set([...currentGens, ...unselectedGens])];
+
+    const modal = document.getElementById('modal');
+    const content = document.getElementById('modal-content');
+    modal.style.display='flex';
+    content.innerHTML = `
+      <h2>${army?'调整军团':'组建新军团'}</h2>
+      <div style="margin:8px 0"><label>军团名称：</label><input id="army-name" value="${army?army.name:state.factions[state.playerId].name+(currentCount+1)+'军'}" style="width:140px"></div>
+      <div style="margin:8px 0"><label>驻扎城池：</label><select id="army-city">${pcities.map(c=>`<option value="${c.name}" ${army&&army.city===c.name?'selected':''}>${c.name}</option>`).join('')}</select></div>
+      <div style="margin:8px 0"><label>将领（最多3人）：</label></div>
+      <div id="gen-picker">${allSelectable.map(name=>`<label style="margin-right:12px"><input type="checkbox" value="${name}" ${currentGens.includes(name)?'checked':''}> ${name}</label>`).join('')}</div>
+      <div style="margin:8px 0"><label>步兵：</label><input type="number" id="army-infantry" value="${army?army.infantry:0}" min="0" step="100" style="width:80px"></div>
+      <div style="margin:8px 0"><label>骑兵：</label><input type="number" id="army-cavalry" value="${army?army.cavalry:0}" min="0" step="100" style="width:80px"></div>
+      <div style="margin:8px 0"><label>弓兵：</label><input type="number" id="army-archer" value="${army?army.archer:0}" min="0" step="100" style="width:80px"></div>
+      <p>可用兵力：${Math.floor(p.troops)} · 预计消耗：步兵1粮/百、骑兵1.5粮/百、弓兵1.1粮/百（按季节结算）</p>
+      <div style="margin-top:12px"><button class="action" onclick="window.saveArmy(${armyId||'null'})" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">保存</button>
+      <button class="action" onclick="window.closeModal()">取消</button></div>
+    `;
+  };
+
+  window.saveArmy = (armyId)=>{
+    const p = player();
+    const name = document.getElementById('army-name').value.trim() || '无名军团';
+    const city = document.getElementById('army-city').value;
+    const gens = Array.from(document.querySelectorAll('#gen-picker input:checked')).map(i=>i.value).slice(0,3);
+    const infantry = Math.max(0, parseInt(document.getElementById('army-infantry').value)||0);
+    const cavalry = Math.max(0, parseInt(document.getElementById('army-cavalry').value)||0);
+    const archer = Math.max(0, parseInt(document.getElementById('army-archer').value)||0);
+    const total = infantry + cavalry + archer;
+    if(total > p.troops + (armyId?armyTroopTotal(findArmy(armyId)):0)){ alert('兵力不足'); return; }
+    if(total < 100){ alert('军团总兵力至少100'); return; }
+
+    if(armyId){
+      const army = findArmy(armyId);
+      p.troops += armyTroopTotal(army);
+      army.name = name; army.city = city; army.generals = gens;
+      army.infantry = infantry; army.cavalry = cavalry; army.archer = archer;
+      p.troops -= total;
+      log(`调整军团 ${name}，总兵力 ${total}`);
+    }else{
+      state.armies.push({id:state.nextArmyId++, faction:state.playerId, name, city, generals:gens, infantry, cavalry, archer});
+      p.troops -= total;
+      log(`组建军团 ${name}，总兵力 ${total}`);
+    }
+    window.closeModal();
+    renderAll();
+  };
+
+  window.disbandArmy = (armyId)=>{
+    if(!confirm('确定解散该军团？兵力将返回预备役。')) return;
+    const army = findArmy(armyId);
+    if(!army) return;
+    const p = state.factions[army.faction];
+    p.troops += armyTroopTotal(army);
+    state.armies = state.armies.filter(a=>a.id!==armyId);
+    log(`解散军团 ${army.name}，兵力返回预备役`);
+    renderAll();
+  };
+
+  window.closeModal = ()=>{
+    document.getElementById('modal').style.display='none';
+    document.getElementById('modal-content').innerHTML='';
+  };
+
+  function renderDiplomacy(c) {
+    const p = player();
+    const others = Object.values(state.factions).filter(f=>f.id!==state.playerId);
+    c.innerHTML = `<div class="card"><h3>外交关系</h3>` +
+      others.map(f=>{
+        const r = relation(state.playerId,f.id);
+        let level = r>=80?'盟友':r>=50?'友好':r>=20?'中立':r>=0?'敌对':'战争';
+        return `<div style="margin:8px 0;padding:8px;border:1px solid var(--border);border-radius:4px">
+          <b><span class="faction-dot" style="background:${f.color}"></span>${f.name}</b> 关系值:${r} (${level})
+          <div style="margin-top:6px">
+            <button class="action" onclick="window.doDiplomacy('ally','${f.id}')" ${p.gold<500||r<50?'disabled':''}>结盟(500金)</button>
+            <button class="action" onclick="window.doDiplomacy('trade','${f.id}')" ${p.food<200?'disabled':''}>贸易(200粮)</button>
+            <button class="action" onclick="window.doDiplomacy('gift','${f.id}')" ${p.gold<300?'disabled':''}>送礼(300金)</button>
+            <button class="action" onclick="window.doDiplomacy('sow','${f.id}')" ${p.gold<400?'disabled':''}>离间(400金)</button>
+            <button class="action" onclick="window.doDiplomacy('peace','${f.id}')" ${p.gold<300||r>=0?'disabled':''}>停战(300金)</button>
+            <button class="action" onclick="window.doDiplomacy('war','${f.id}')">宣战</button>
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+
+  window.doDiplomacy = (type,targetId)=>{
+    const p = player();
+    const f = state.factions[targetId];
+    if(type==='ally' && p.gold>=500){
+      p.gold-=500; setRelation(state.playerId,targetId,relation(state.playerId,targetId)+30);
+      p.allies.push(targetId); f.allies.push(state.playerId);
+      log(`与 ${f.name} 结为盟友，关系+30`);
+    }else if(type==='trade' && p.food>=200){
+      p.food-=200; p.gold+=300; setRelation(state.playerId,targetId,relation(state.playerId,targetId)+10);
+      log(`与 ${f.name} 贸易，用200粮换300金，关系+10`);
+    }else if(type==='gift' && p.gold>=300){
+      p.gold-=300; setRelation(state.playerId,targetId,relation(state.playerId,targetId)+15);
+      log(`向 ${f.name} 送礼，关系+15`);
+    }else if(type==='sow' && p.gold>=400){
+      p.gold-=400;
+      const targets = state.generals.filter(g=>g.faction===targetId);
+      if(targets.length){
+        const g = targets[Math.floor(Math.random()*targets.length)];
+        const drop = 15+Math.floor(Math.random()*16);
+        g.loyalty-=drop;
+        log(`离间 ${f.name} 的 ${g.name}，忠诚度-${drop}`);
+      }
+    }else if(type==='peace' && p.gold>=300){
+      p.gold-=300; setRelation(state.playerId,targetId,20);
+      log(`与 ${f.name} 停战，关系恢复为20`);
+    }else if(type==='war'){
+      setRelation(state.playerId,targetId,-100);
+      log(`向 ${f.name} 宣战！`);
+    }
+    renderAll();
+  };
+
+  function renderMap(c) {
+    // Focused bounding box around playable area for 46 cities
+    const mapBounds = { minX: 440, minY: 100, maxX: 2040, maxY: 1560 };
+    const mapW = mapBounds.maxX - mapBounds.minX;
+    const mapH = mapBounds.maxY - mapBounds.minY;
+    function mapX(x) { return ((x - mapBounds.minX) / mapW) * 100; }
+    function mapY(y) { return ((y - mapBounds.minY) / mapH) * 100; }
+
+    const lines = [];
+    const drawn = new Set();
+    state.cities.forEach(ct => {
+      ct.neighbors.forEach(n => {
+        const key = [ct.name, n].sort().join('-');
+        if (drawn.has(key)) return;
+        drawn.add(key);
+        const t = findCity(n);
+        if (!t) return;
+        lines.push(`<line x1="${mapX(ct.x)}%" y1="${mapY(ct.y)}%" x2="${mapX(t.x)}%" y2="${mapY(t.y)}%" stroke="#a07c5a" stroke-width="2" stroke-linecap="round"/>`);
+      });
+    });
+
+    const nodes = state.cities.map(ct => {
+      const owner = ct.owner ? state.factions[ct.owner] : null;
+      const ownerMark = owner ? ` [${owner.name.charAt(0)}]` : '';
+      const left = mapX(ct.x);
+      const top = mapY(ct.y);
+      return `<div class="map-node" style="left:${left}%;top:${top}%" onclick="window.switchTab('military')" title="${ct.name} 守军${Math.floor(ct.troops)}">
+        <span class="n-name">${ct.name}${ownerMark}</span>
+        <span class="n-troops">守:${Math.floor(ct.troops)} 民:${ct.morale}</span>
+      </div>`;
+    }).join('');
+
+    let html = `
+      <div class="card">
+        <h3>天下地图</h3>
+        <div class="map-wrapper">
+          <svg class="map-lines" preserveAspectRatio="none">
+            ${lines.join('')}
+          </svg>
+          <div class="map-region-label" style="left:52%;top:18%">北方</div>
+          <div class="map-region-label" style="left:72%;top:42%">中原</div>
+          <div class="map-region-label" style="left:62%;top:78%">南方</div>
+          <div class="map-region-label" style="left:18%;top:72%">西蜀</div>
+          ${nodes}
+        </div>
+      </div>
+      <div class="card"><h3>城池数据</h3>
+      <table><tr><th>城池</th><th>区域</th><th>归属</th><th>守军</th><th>城防</th><th>粮食</th><th>金钱</th><th>民心</th></tr>
+      ${state.cities.map(ct=>{
+        const owner = ct.owner ? `<span class="faction-dot" style="background:${state.factions[ct.owner].color}"></span>${state.factions[ct.owner].name}` : '无主';
+        return `<tr><td>${ct.name}</td><td>${ct.region}</td><td>${owner}</td><td>${Math.floor(ct.troops)}</td><td>${ct.defense}</td><td>${ct.food}</td><td>${ct.money}</td><td>${ct.morale}</td></tr>`;
+      }).join('')}
+      </table></div>
+      <div class="card"><h3>势力图例</h3>
+      ${Object.values(state.factions).map(f=>`<span style="margin-right:16px"><span class="faction-dot" style="background:${f.color}"></span>${f.name} · 城池${factionCities(f.id).length} · 兵力${Math.floor(f.troops)}</span>`).join('')}
+      </div>`;
+    c.innerHTML = html;
+  }
+
+  function renderLogPage(c) {
+    c.innerHTML = `<div class="card"><h3>完整日志</h3>${state.logs.map(m=>`<div class="log-entry">${m}</div>`).join('')}</div>`;
+  }
+
+  function renderAll() {
+    renderHeader(); renderSidebar(); renderContent(); renderLogs();
+  }
+
+  window.nextTurn = ()=>{
+    if(state.gameOver) return;
+    state.month++; state.turn++;
+    if(state.month>12){ state.month=1; state.year++; }
+    // Wound recovery
+    state.generals.forEach(g=>{
+      if(g.injured){
+        g.injuredTurns--;
+        if(g.injuredTurns<=0){ g.injured=0; if(g.faction===state.playerId) log(`${g.name} 伤愈复出`); }
+      }
+    });
+    // Resource settlement
+    Object.values(state.factions).forEach(f=>{
+      const cities = factionCities(f.id);
+      let foodGain=0, goldGain=0;
+      cities.forEach(c=>{
+        let fmul = c.morale/100, gmul = c.morale/100;
+        const season = getSeason();
+        if(season==='春') fmul*=1.2;
+        if(season==='秋') fmul*=1.3;
+        foodGain += c.food * fmul + state.tech.farmBonus;
+        goldGain += c.money * gmul + state.tech.commBonus;
+        if(season==='夏' && Math.random()<0.3) c.troops += Math.floor(20 * (1 + 0.2));
+        c.morale = Math.max(20, Math.min(100, c.morale + (f.id===state.playerId && findGeneral('刘备')?.faction===state.playerId?1:0) - 1));
+      });
+      f.food += foodGain; f.gold += goldGain;
+      const consume = Math.floor(f.troops/100)*20;
+      f.food -= consume;
+      if(f.food<0){
+        const decay = Math.floor(Math.abs(f.food)/5);
+        f.troops = Math.max(0, f.troops-decay);
+        if(f.id===state.playerId) log(`粮食不足，兵力衰减 ${decay}`);
+        f.food=0;
+      }
+      // Troop cap by cities
+      f.troops = Math.min(f.troops, cities.reduce((a,c)=>a+c.troops,0)+cities.length*3000);
+      // Food consumption for field armies
+      const myArmies = factionArmies(f.id);
+      myArmies.forEach(a=>{
+        const foodNeed = Math.floor(armyTroopTotal(a)/100) * (a.infantry*1 + a.cavalry*1.5 + a.archer*1.1) / armyTroopTotal(a) * 20;
+        f.food -= foodNeed;
+      });
+    });
+    // AI turns
+    Object.values(state.factions).filter(f=>f.ai).forEach(f=>{
+      aiTurn(f);
+      aiArmyAttack(f);
+    });
+    // Historical events
+    historicalEvents();
+    // Random yearly event
+    if(state.month===1) randomEvent();
+    // Relation fluctuations
+    Object.values(state.factions).forEach(a=>{
+      Object.values(state.factions).forEach(b=>{
+        if(a.id!==b.id && Math.random()<0.15){
+          setRelation(a.id,b.id,relation(a.id,b.id)+(Math.random()<0.5?-5:5));
+        }
+      });
+    });
+    checkVictory();
+    saveAuto();
+    renderAll();
+  };
+
+  function aiTurn(f) {
+    const cities = factionCities(f.id);
+    // Recruit
+    if(f.gold>500 && f.troops<2000 && cities.length){
+      f.gold-=150; f.food-=200; const add=100+Math.floor(Math.random()*101); f.troops+=add;
+    }
+    // Develop
+    if(f.personality==='conservative' && f.gold>400 && cities.length){
+      f.gold-=200; cities.forEach(c=>c.food+=15);
+    }
+    // Diplomatic AI ally
+    if(f.personality==='diplomatic' && Math.random()<0.4){
+      const candidates = Object.values(state.factions).filter(o=>o.id!==f.id && relation(f.id,o.id)>30 && !f.allies.includes(o.id));
+      if(candidates.length){
+        const t = candidates[Math.floor(Math.random()*candidates.length)];
+        f.gold-=500; setRelation(f.id,t.id,relation(f.id,t.id)+30);
+        f.allies.push(t.id); t.allies.push(f.id);
+        log(`${f.name} 与 ${t.name} 结为盟友`);
+      }
+    }
+    // Attack
+    if(f.personality==='expansion' || (f.personality==='diplomatic' && Math.random()<0.3)){
+      const myCities = factionCities(f.id);
+      const targets = [];
+      myCities.forEach(c=>{
+        c.neighbors.forEach(n=>{
+          const t = findCity(n);
+          if(t && t.owner!==f.id && (!t.owner || relation(f.id,t.owner)<80)){
+            targets.push({from:c,to:t});
+          }
+        });
+      });
+      targets.sort((a,b)=>a.to.troops-b.to.troops);
+        for(const atk of targets){
+        if(f.troops>atk.to.troops*0.8 && f.troops>500){
+          const gen = factionGenerals(f.id).filter(g=>!g.injured).sort((a,b)=>b.force-a.force)[0];
+          if(gen){
+            const use = Math.min(f.troops, Math.max(500, Math.floor(atk.to.troops*1.2)));
+            battle(f.id, atk.to.owner||'neutral', gen, use, atk.to, 'infantry');
+            if(Math.random()<0.7) break;
+          }
+        }
+      }
+    }
+    // Distribute troops to cities and auto-create armies for AI
+    if(cities.length && f.troops>0){
+      const per = Math.floor(f.troops/cities.length);
+      cities.forEach(c=>{ c.troops += per; });
+      f.troops -= per*cities.length;
+    }
+    // Auto-create or replenish one army per city if enough troops
+    const myArmies = factionArmies(f.id);
+    cities.forEach(city=>{
+      const stationed = myArmies.filter(a=>a.city===city.name);
+      if(stationed.length===0 && city.troops>=500){
+        const gens = availableGenerals(f.id).filter(g=>g.faction===f.id && !g.injured).sort((a,b)=>b.force-a.force).slice(0,3).map(g=>g.name);
+        const use = Math.min(city.troops, 1500);
+        state.armies.push({id:state.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, infantry:Math.floor(use*0.6), cavalry:Math.floor(use*0.25), archer:Math.floor(use*0.15)});
+        city.troops -= use;
+      } else if(stationed.length && city.troops>=300){
+        const a = stationed[0];
+        const add = Math.min(city.troops-200, 500);
+        a.infantry += Math.floor(add*0.6); a.cavalry += Math.floor(add*0.25); a.archer += Math.floor(add*0.15);
+        city.troops -= add;
+      }
+    });
+  }
+
+  function aiArmyAttack(f) {
+    if(f.personality==='expansion' || (f.personality==='diplomatic' && Math.random()<0.3)){
+      const myArmies = factionArmies(f.id).filter(a=>armyTroopTotal(a)>=500);
+      const targets = [];
+      myArmies.forEach(a=>{
+        const city = a.city ? findCity(a.city) : null;
+        if(!city) return;
+        city.neighbors.forEach(n=>{
+          const t = findCity(n);
+          if(t && t.owner!==f.id && (!t.owner || relation(f.id,t.owner)<80)){
+            targets.push({army:a,to:t});
+          }
+        });
+      });
+      targets.sort((a,b)=>a.to.troops-b.to.troops);
+      for(const atk of targets){
+        if(armyTroopTotal(atk.army)>atk.to.troops*0.6){
+          if(atk.to.owner) setRelation(f.id,atk.to.owner,-100);
+          armyBattle(f.id, atk.to.owner||'neutral', atk.army, atk.to);
+          if(Math.random()<0.6) break;
+        }
+      }
+    }
+  }
+
+  function historicalEvents() {
+    const y = state.year;
+    // Yellow Turban
+    if(y>=2 && y<=4 && !state.eventsTriggered.yellowTurban && Math.random()<0.25){
+      state.eventsTriggered.yellowTurban=true;
+      const free = state.cities.filter(c=>!c.owner);
+      if(free.length){
+        const c = free[Math.floor(Math.random()*free.length)];
+        c.owner='huangjin'; c.troops=3000; c.morale=50;
+        state.factions.huangjin = {id:'huangjin',name:'黄巾军',color:'#d4af37',leader:'张角',personality:'expansion',ai:true,food:500,gold:200,troops:0,morale:60,allies:[]};
+        state.relations.huangjin={}; Object.keys(state.factions).forEach(k=>{state.relations.huangjin[k]=-50;state.relations[k].huangjin=-50;});
+        log(`黄巾起义爆发！张角占据 ${c.name}，建立黄巾军势力！`);
+      }
+    }
+    // Guandu
+    if(y>=4 && y<=6 && !state.eventsTriggered.guandu && Math.random()<0.3){
+      state.eventsTriggered.guandu=true;
+      setRelation('cao','yuan',-100);
+      log('官渡之战：曹操与袁绍正式宣战！');
+    }
+    // San gu maolu
+    if(y>=3 && y<=5 && !state.eventsTriggered.sangu && player().id==='liu' && !factionGenerals('liu').some(g=>g.name==='诸葛亮')){
+      state.eventsTriggered.sangu=true;
+      const zg = findGeneral('诸葛亮');
+      if(zg && zg.faction!=='liu'){ zg.faction='liu'; zg.loyalty=100; log('三顾茅庐：诸葛亮出山，辅佐刘备！'); }
+    }
+    // Chibi
+    if(y>=6 && y<=8 && !state.eventsTriggered.chibi){
+      state.eventsTriggered.chibi=true;
+      log('赤壁之战：曹操南征，孙刘联盟抗曹！');
+    }
+    // Diyi shijinzhou
+    if(y>=8 && y<=12 && !state.eventsTriggered.jingzhouLost){
+      const guanyu = findGeneral('关羽');
+      const jz = findCity('荆州');
+      if(guanyu && guanyu.faction==='liu' && jz.owner==='liu' && Math.random()<0.2){
+        state.eventsTriggered.jingzhouLost=true;
+        jz.owner='sun'; jz.troops=Math.floor(jz.troops*0.7);
+        log(`大意失荆州：孙权偷袭荆州，关羽败走麦城！`);
+      }
+    }
+    // Baimenlou
+    if(y>=5 && y<=8 && !state.eventsTriggered.baimenlou && state.factions.lv){
+      if(Math.random()<0.25){
+        state.eventsTriggered.baimenlou=true;
+        const cao = state.factions.cao;
+        factionCities('lv').forEach(c=>{c.owner='cao';c.morale=50;});
+        log('白门楼：吕布兵败被杀，城池尽归曹操！');
+      }
+    }
+    // Wuzhangyuan
+    if(y>=15 && y<=17 && !state.eventsTriggered.wuzhangyuan){
+      const zg = findGeneral('诸葛亮');
+      if(zg && zg.faction===state.playerId && Math.random()<0.3){
+        state.eventsTriggered.wuzhangyuan=true;
+        zg.injured=1; zg.injuredTurns=99;
+        log('五丈原：诸葛亮星落秋风，英年早逝！');
+      }
+    }
+    // Three Kingdoms to Jin
+    if(y>=20 && y<=25 && !state.eventsTriggered.sanguiguijin){
+      const smy = findGeneral('司马懿');
+      if(smy && smy.faction===state.playerId && Math.random()<0.2){
+        state.eventsTriggered.sanguiguijin=true;
+        log('三国归晋：司马氏代魏，天下终归晋朝！');
+        state.gameOver=true; state.winner='jin';
+      }
+    }
+  }
+
+  function randomEvent() {
+    const r = Math.random();
+    const cities = state.cities;
+    if(r<0.2){
+      const c = cities[Math.floor(Math.random()*cities.length)];
+      c.food += 50; log(`丰收：${c.name} 粮食大增`);
+    }else if(r<0.35){
+      const c = cities[Math.floor(Math.random()*cities.length)];
+      c.troops = Math.max(0, c.troops-300); c.morale-=10; log(`瘟疫：${c.name} 守军大损`);
+    }else if(r<0.5){
+      const c = cities[Math.floor(Math.random()*cities.length)];
+      c.troops = Math.max(0, c.troops-200); log(`山贼袭扰：${c.name} 守军减少`);
+    }else if(r<0.65){
+      const c = cities[Math.floor(Math.random()*cities.length)];
+      c.money += 100; log(`商路繁荣：${c.name} 金钱增加`);
+    }else{
+      log('这一年天下相对太平。');
+    }
+  }
+
+  function checkVictory() {
+    const p = player();
+    const total = state.cities.length;
+    const mine = factionCities(state.playerId).length;
+    if(mine>=Math.ceil(total*0.85)){ state.gameOver=true; state.winner=state.playerId; log('统一天下！你赢得了胜利！'); return; }
+    if(mine===0 || (p.food<=0 && p.gold<=0 && p.troops<=0)){
+      state.gameOver=true; state.winner=null; log('你的势力覆灭了。');
+    }
+  }
+
+  function saveAuto() {
+    try{ localStorage.setItem('sanguo_slg_autosave', JSON.stringify(serializeState())); }catch(e){}
+  }
+
+  window.saveGame = ()=>{
+    try{
+      localStorage.setItem('sanguo_slg_save', JSON.stringify(serializeState()));
+      log('游戏已手动保存。');
+    }catch(e){ log('保存失败：'+e.message); }
+  };
+
+  window.loadGame = ()=>{
+    try{
+      const data = localStorage.getItem('sanguo_slg_save') || localStorage.getItem('sanguo_slg_autosave');
+      if(!data){ log('没有存档。'); return; }
+      deserializeState(JSON.parse(data));
+      log('游戏已读取。');
+      renderAll();
+    }catch(e){ log('读档失败：'+e.message); }
+  };
+
+  function serializeState() {
+    return JSON.parse(JSON.stringify(state));
+  }
+
+  function deserializeState(data) {
+    state = data;
+    if(!state.nextArmyId) state.nextArmyId = (state.armies||[]).reduce((m,a)=>Math.max(m,a.id||0),0)+1;
+    if(!state.armies) state.armies = [];
+    // Rebuild faction list if huangjin exists
+    if(!state.factions.huangjin && state.cities.some(c=>c.owner==='huangjin')){
+      state.factions.huangjin = {id:'huangjin',name:'黄巾军',color:'#d4af37',leader:'张角',personality:'expansion',ai:true,food:500,gold:200,troops:0,morale:60,allies:[]};
+    }
+    // Ensure relations matrix covers all factions
+    const ids = Object.keys(state.factions);
+    ids.forEach(a=>{
+      if(!state.relations[a]) state.relations[a]={};
+      ids.forEach(b=>{
+        if(state.relations[a][b]===undefined) state.relations[a][b]=a===b?100:20;
+      });
+    });
+  }
+
+  window.onerror = (msg)=>{ log('系统错误：'+msg); return true; };
+  window.initGame = initState;
+
+  initState();
+})();
+</script>
+</body>
+</html>
