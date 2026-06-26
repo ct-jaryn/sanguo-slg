@@ -194,6 +194,17 @@
     .tutorial-box h2 { color: var(--accent-red); margin-top: 0; }
     .tutorial-box ul { margin: 12px 0; padding-left: 20px; }
     .tutorial-box li { margin: 6px 0; }
+    .tutorial-target { position: relative; z-index: 201; box-shadow: 0 0 0 4px var(--accent-orange); animation: tutorialPulse 1.2s infinite; border-radius: 4px; }
+    @keyframes tutorialPulse { 0% { box-shadow: 0 0 0 2px var(--accent-orange); } 50% { box-shadow: 0 0 0 6px rgba(230,126,34,0.4); } 100% { box-shadow: 0 0 0 2px var(--accent-orange); } }
+    .battle-fx { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; z-index: 150; pointer-events: none; }
+    .battle-fx.active { display: flex; }
+    .battle-fx .fx-text { font-size: 2.2rem; font-weight: bold; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.8); animation: battlePop 0.7s ease-out forwards; }
+    .battle-fx .fx-text.defeat { color: #ff6b6b; }
+    .battle-shake { animation: battleShake 0.4s ease-in-out; }
+    @keyframes battleShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-4px); } }
+    @keyframes battlePop { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+    .achievement-pop { position: fixed; top: 16px; right: 16px; background: var(--panel); border: 2px solid var(--accent-green); border-radius: 8px; padding: 12px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 160; animation: slideIn 0.5s ease-out; }
+    @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   </style>
 </head>
 <body>
@@ -214,21 +225,9 @@
 </div>
 <div class="modal-overlay" id="modal"><div class="modal" id="modal-content"></div></div>
 <div class="tutorial-overlay" id="tutorial">
-  <div class="tutorial-box">
-    <h2>欢迎来到《三国风云·轻量 SLG》</h2>
-    <p>你扮演刘备，目标是统一天下。核心循环：</p>
-    <ul>
-      <li><b>内政</b>：开垦农田、发展商业、研发科技、颁布政策</li>
-      <li><b>军事</b>：组建军团、选择战术、攻占相邻城池</li>
-      <li><b>人才</b>：寻访武将、装备养成、提升等级</li>
-      <li><b>外交</b>：结盟、贸易、离间、宣战</li>
-      <li><b>事件</b>：及时处理随机事件，获得机遇或化解危机</li>
-      <li><b>结束回合</b>：资源结算后 AI 行动，历史事件可能触发</li>
-    </ul>
-    <p>小提示：武将战斗可获得经验升级，装备可进一步提升属性。围城战术适合消耗坚城，火攻/水战/埋伏需要对应条件。</p>
-    <div style="margin-top:16px"><button class="action" onclick="window.closeTutorial()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">开始征程</button></div>
-  </div>
+  <div class="tutorial-box" id="tutorial-box"></div>
 </div>
+<div class="battle-fx" id="battle-fx"></div>
 <script>
 (() => {
   const SAVE_VERSION = '1.0';
@@ -498,6 +497,42 @@
       condition:(ctx)=>getSeason()==='冬',
       desc:(ctx)=>`寒冬腊月，士卒难耐。`,
       effect:(ctx)=>{ ctx.faction.food -= factionCities(ctx.faction.id).length * 20; }
+    },
+    {
+      id:'cooking_wine', title:'煮酒论英雄', type:'choice', weight:0,
+      condition:(ctx)=> state.year>=2 && state.year<=4 && state.playerId==='liu' && !state.eventsTriggered.cookingWine && state.factions.cao && !state.factions.cao.eliminated,
+      desc:'曹操邀刘备青梅煮酒，论天下英雄。',
+      choices:[
+        {label:'谦辞推托', effect:(ctx)=>{ setRelation('liu','cao', relation('liu','cao')+20); state.eventsTriggered.cookingWine=true; return '刘备谦辞，曹操释然，双方关系缓和。'; }},
+        {label:'豪言以对', effect:(ctx)=>{ setRelation('liu','cao', relation('liu','cao')-40); player().morale = Math.min(100, player().morale+10); state.eventsTriggered.cookingWine=true; return '刘备豪言震座，曹操心生忌惮，刘备声望提升。'; }}
+      ]
+    },
+    {
+      id:'coalition_dongzhuo', title:'十八路诸侯讨董', type:'choice', weight:0,
+      condition:(ctx)=> state.year>=1 && state.year<=2 && !state.eventsTriggered.coalitionDongzhuo,
+      desc:'董卓乱政，群雄呼吁结盟讨伐。',
+      choices:[
+        {label:'起兵响应（损兵500，关系+20）', condition:(ctx)=>ctx.faction.troops>=500, effect:(ctx)=>{ ctx.faction.troops-=500; state.eventsTriggered.coalitionDongzhuo=true; Object.values(state.factions).filter(o=>o.id!==ctx.faction.id && !o.eliminated).forEach(o=>setRelation(ctx.faction.id,o.id,relation(ctx.faction.id,o.id)+20)); return '你响应讨董，群雄称颂。'; }},
+        {label:'按兵不动', effect:(ctx)=>{ state.eventsTriggered.coalitionDongzhuo=true; Object.values(state.factions).filter(o=>o.id!==ctx.faction.id && !o.eliminated).forEach(o=>setRelation(ctx.faction.id,o.id,relation(ctx.faction.id,o.id)-10)); return '你按兵不动，群雄颇有微词。'; }}
+      ]
+    },
+    {
+      id:'yiling_battle', title:'夷陵之战', type:'choice', weight:0,
+      condition:(ctx)=> state.year>=12 && state.year<=16 && state.playerId==='liu' && !state.eventsTriggered.yiling && state.factions.sun && !state.factions.sun.eliminated && findCity('荆州') && findCity('荆州').owner==='sun',
+      desc:'关羽失荆州后，刘备誓要东征孙权。',
+      choices:[
+        {label:'举兵复仇（与孙吴决裂）', effect:(ctx)=>{ setRelation('liu','sun',-100); state.eventsTriggered.yiling=true; return '刘备兴兵伐吴，孙刘联盟破裂。'; }},
+        {label:'以和为贵（赔款300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; setRelation('liu','sun',20); state.eventsTriggered.yiling=true; return '刘备隐忍，孙刘重修旧好。'; }}
+      ]
+    },
+    {
+      id:'seven_captures', title:'南中平定', type:'choice', weight:0,
+      condition:(ctx)=> state.year>=10 && state.year<=18 && !state.eventsTriggered.sevenCaptures && ['成都','永安','建宁','云南'].filter(n=>{ const c=findCity(n); return c && c.owner===ctx.faction.id; }).length>=2,
+      desc:'南中蛮族反复，诸葛亮建议恩威并施。',
+      choices:[
+        {label:'七擒七纵（耗费500兵，收服人心）', condition:(ctx)=>ctx.faction.troops>=500, effect:(ctx)=>{ ctx.faction.troops-=500; ctx.faction.gold+=300; ctx.faction.food+=300; state.eventsTriggered.sevenCaptures=true; return '七擒孟获，南中平定，获得大量物资。'; }},
+        {label:'征讨镇压', effect:(ctx)=>{ ctx.faction.troops-=300; state.eventsTriggered.sevenCaptures=true; return '南中蛮族暂服，但隐患未除。'; }}
+      ]
     }
   ];
 
@@ -541,6 +576,27 @@
 
   // 城池临水判定（用于水战）
   const RIVER_CITIES = ['襄阳','江夏','柴桑','建业','扬州','庐江','长沙','武陵','荆州','永安','江州','广陵','寿春','豫章','桂阳','零陵','会稽','建安'];
+
+  // AI 军团编成偏好：根据战术/地理调整步骑弓比例
+  const AI_COMP_PREFS = {
+    normal: { infantry: 0.55, cavalry: 0.25, archer: 0.20 },
+    siege: { infantry: 0.50, cavalry: 0.20, archer: 0.30 },
+    fire: { infantry: 0.35, cavalry: 0.20, archer: 0.45 },
+    ambush: { infantry: 0.35, cavalry: 0.25, archer: 0.40 },
+    water: { infantry: 0.65, cavalry: 0.15, archer: 0.20 },
+    cavalry: { infantry: 0.30, cavalry: 0.55, archer: 0.15 }
+  };
+
+  // 武将羁绊/组合技：同军团凑齐指定人数触发战场加成
+  const BONDS = [
+    { id: 'taoyuan', name: '桃园结义', members: ['刘备','关羽','张飞'], require: 3, bonus: { forceMul: 1.08, atkMul: 1.12, moraleMul: 1.10 }, desc: '三英同心，攻击+12%' },
+    { id: 'wuhu', name: '五虎上将', members: ['关羽','张飞','赵云','马超','黄忠'], require: 3, bonus: { forceMul: 1.10, atkMul: 1.10, defMul: 1.05 }, desc: '蜀汉五虎齐聚，全军战力提升' },
+    { id: 'cao_advisors', name: '王佐之才', members: ['曹操','郭嘉','荀彧'], require: 3, bonus: { atkMul: 1.10, defMul: 1.10, moraleMul: 1.10 }, desc: '曹氏智囊团，攻防兼备' },
+    { id: 'wu_dudu', name: '东吴都督', members: ['周瑜','陆逊','吕蒙','鲁肃'], require: 3, bonus: { atkMul: 1.10, defMul: 1.10 }, desc: '水军与谋略并进' },
+    { id: 'wolongfengchu', name: '卧龙凤雏', members: ['诸葛亮','庞统'], require: 2, bonus: { atkMul: 1.15 }, desc: '得一可安天下' },
+    { id: 'lv_diao', name: '英雄美人', members: ['吕布','貂蝉'], require: 2, bonus: { forceMul: 1.10, woundExtra: -0.15 }, desc: '吕布貂蝉并肩，武力与生存提升' },
+    { id: 'hebei_pillars', name: '河北双雄', members: ['颜良','文丑'], require: 2, bonus: { forceMul: 1.08, atkMul: 1.10 }, desc: '河北猛将，所向披靡' }
+  ];
 
   function makeGenerals() {
     const data = [
@@ -696,14 +752,16 @@
       armies: [],
       nextArmyId: 1,
       tutorial: true,
+      tutorialStep: 0,
       shownTips: {},
       achievements: {},
       stats: { wins: 0, battles: 0, generalsDefeated: 0, citiesLost: 0, eventsResolved: 0 },
-      eventChains: {}
+      eventChains: {},
+      endingTitle: null
     };
     log('游戏开始！公元190年，乱世群雄并起。');
     renderAll();
-    if(state.tutorial) setTimeout(()=>{ document.getElementById('tutorial').style.display='flex'; }, 100);
+    if(state.tutorial) setTimeout(()=>{ window.showTutorialStep(); }, 100);
   }
 
   function getSeason() {
@@ -759,6 +817,82 @@
     if(leveled) log(`${g.name} 升级至 Lv.${g.level}！`);
   }
 
+  // ---------- AI 军团编成优化 ----------
+  function aiArmyTacticHint(f, city) {
+    const nearby = city.neighbors.map(n => findCity(n)).filter(Boolean);
+    const riverRatio = nearby.length ? nearby.filter(n => RIVER_CITIES.includes(n.name)).length / nearby.length : 0;
+    if (riverRatio >= 0.4) return 'water';
+    const enemyStrong = nearby.some(n => n.owner && n.owner !== f.id && (n.defense >= 1.2 || n.troops >= 1500));
+    if (city.defense >= 1.2 || enemyStrong) return 'siege';
+    const gens = availableGenerals(f.id).filter(g => g.faction === f.id).slice(0, 3);
+    const avgInt = gens.length ? gens.reduce((s, g) => s + g.intelligence, 0) / gens.length : 50;
+    if (avgInt >= 75) return Math.random() < 0.5 ? 'fire' : 'ambush';
+    const northernPlains = ['平原','北平','蓟','南皮','晋阳','河内','陈留','邺城'];
+    if (northernPlains.includes(city.name)) return 'cavalry';
+    return 'normal';
+  }
+
+  function getOptimalAIComp(f, city, use) {
+    const hint = aiArmyTacticHint(f, city);
+    const pref = AI_COMP_PREFS[hint] || AI_COMP_PREFS.normal;
+    let inf = Math.floor(use * pref.infantry);
+    let cav = Math.floor(use * pref.cavalry);
+    let arc = Math.floor(use * pref.archer);
+    const sum = inf + cav + arc;
+    if (sum < use) {
+      const diff = use - sum;
+      const order = hint === 'cavalry' ? ['cavalry','infantry','archer'] : (hint === 'fire' || hint === 'ambush' ? ['archer','infantry','cavalry'] : ['infantry','cavalry','archer']);
+      for (const type of order) {
+        if (diff <= 0) break;
+        if (type === 'infantry') { inf += diff; break; }
+        if (type === 'cavalry') { cav += diff; break; }
+        if (type === 'archer') { arc += diff; break; }
+      }
+    }
+    return { infantry: inf, cavalry: cav, archer: arc, hint };
+  }
+
+  function pickAIGenerals(f, hint) {
+    const pool = availableGenerals(f.id).filter(g => g.faction === f.id && !g.injured);
+    if (!pool.length) return [];
+    let sorted;
+    if (hint === 'fire' || hint === 'ambush') sorted = pool.slice().sort((a, b) => b.intelligence - a.intelligence);
+    else if (hint === 'siege' || hint === 'water') sorted = pool.slice().sort((a, b) => b.command - a.command);
+    else sorted = pool.slice().sort((a, b) => b.force - a.force);
+    const main = sorted[0];
+    const rest = pool.filter(g => g !== main).sort((a, b) => b.force - a.force).slice(0, 2);
+    return [main, ...rest].map(g => g.name);
+  }
+
+  function chooseAITroopType(general, targetCity) {
+    if (!general) return 'infantry';
+    if (RIVER_CITIES.includes(targetCity.name)) return 'infantry';
+    if (general.intelligence >= 75) return 'archer';
+    if (general.force >= 90) return 'cavalry';
+    return 'infantry';
+  }
+
+  // ---------- 武将羁绊 ----------
+  function getArmyBondBonus(army) {
+    const mods = { forceMul: 1, atkMul: 1, defMul: 1, moraleMul: 1, woundExtra: 0 };
+    const active = [];
+    if (!army || !army.generals.length) return { mods, active };
+    BONDS.forEach(bond => {
+      const need = bond.require || bond.members.length;
+      const matched = bond.members.filter(name => army.generals.includes(name));
+      if (matched.length >= need) {
+        active.push(bond);
+        const bonus = bond.bonus;
+        if (bonus.forceMul) mods.forceMul *= bonus.forceMul;
+        if (bonus.atkMul) mods.atkMul *= bonus.atkMul;
+        if (bonus.defMul) mods.defMul *= bonus.defMul;
+        if (bonus.moraleMul) mods.moraleMul *= bonus.moraleMul;
+        if (bonus.woundExtra) mods.woundExtra += bonus.woundExtra;
+      }
+    });
+    return { mods, active };
+  }
+
   function log(msg) {
     state.logs.unshift(`[${state.year}年${state.month}月] ${msg}`);
     if(state.logs.length>50) state.logs.pop();
@@ -811,12 +945,16 @@
 
   window.closeTutorial = () => {
     state.tutorial = false;
+    state.tutorialStep = 0;
     document.getElementById('tutorial').style.display = 'none';
+    document.querySelectorAll('.tutorial-target').forEach(el => el.classList.remove('tutorial-target'));
     saveAuto();
   };
 
   window.showTutorial = () => {
-    document.getElementById('tutorial').style.display = 'flex';
+    state.tutorial = true;
+    state.tutorialStep = 0;
+    window.showTutorialStep();
   };
 
   function currentGoal() {
@@ -847,7 +985,7 @@
   function renderContent() {
     const c = document.getElementById('content');
     if(state.gameOver) {
-      const msg = state.winner===state.playerId ? '恭喜统一天下！' : (state.winner ? `${state.factions[state.winner] ? state.factions[state.winner].name : state.winner} 一统天下，你失败了。` : '你的势力覆灭了。');
+      const msg = state.endingTitle || (state.winner===state.playerId ? '恭喜统一天下！' : (state.winner ? `${state.factions[state.winner] ? state.factions[state.winner].name : state.winner} 一统天下，你失败了。` : '你的势力覆灭了。'));
       c.innerHTML = `<div class="card"><h2>${msg}</h2><button class="action" onclick="window.initGame()">重新开始</button></div>`;
       return;
     }
@@ -1120,17 +1258,22 @@
     const atkFaction = state.factions[attackerId];
     const tactic = TACTICS[tacticKey] || TACTICS.normal;
     const stats = effectiveStats(mainGeneral);
+    const playerInvolved = attackerId === state.playerId || defenderId === state.playerId;
+    if (playerInvolved) playSound('attack');
 
     // 围城：多回合消耗，第一次不判定胜负
     if (tacticKey === 'siege') {
       if (!targetCity.siegeProgress) targetCity.siegeProgress = { attackerId, armyId: army.id, progress: 0, turns: 0 };
       targetCity.siegeProgress.turns++;
-      const siegeDamage = Math.floor(total * 0.15);
+      const bond = getArmyBondBonus(army);
+      const bondMul = bond.mods.forceMul * bond.mods.atkMul;
+      const siegeDamage = Math.floor(total * 0.15 * bondMul);
       targetCity.troops = Math.max(0, targetCity.troops - siegeDamage);
       targetCity.siegeProgress.progress += 25;
       const losses = Math.floor(total * 0.05);
       applyArmyLosses(army, total, losses);
       addGeneralExp(mainGeneral, 15);
+      if (playerInvolved && bond.active.length) bond.active.forEach(b => log(`羁绊触发：${b.name}！${b.desc}`));
       log(`${atkFaction.name} 的 ${army.name} 围困 ${targetCity.name}，守军损失 ${siegeDamage}，围城进度 ${targetCity.siegeProgress.progress}%`);
       if (targetCity.siegeProgress.progress >= 100 || targetCity.troops === 0) {
         // 城池投降
@@ -1160,6 +1303,22 @@
     let aMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
     let dMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
     if(mainGeneral && mainGeneral.skill && SKILLS[mainGeneral.skill] && typeof SKILLS[mainGeneral.skill].battle==='function') SKILLS[mainGeneral.skill].battle(aMods,dMods);
+
+    // 羁绊加成
+    const atkBond = getArmyBondBonus(army);
+    if (atkBond.active.length) {
+      const b = atkBond.mods;
+      aMods.forceMul *= b.forceMul; aMods.atkMul *= b.atkMul; aMods.moraleMul *= b.moraleMul; aMods.defMul *= b.defMul; aMods.woundExtra += b.woundExtra;
+      if (playerInvolved) atkBond.active.forEach(bond => log(`羁绊触发：${bond.name}！${bond.desc}`));
+    }
+    const defArmy = state.armies.find(a => a.faction === defenderId && a.city === targetCity.name);
+    const defBond = getArmyBondBonus(defArmy);
+    if (defBond.active.length) {
+      const b = defBond.mods;
+      dMods.forceMul *= b.forceMul; dMods.atkMul *= b.atkMul; dMods.moraleMul *= b.moraleMul; dMods.defMul *= b.defMul; dMods.woundExtra += b.woundExtra;
+      if (playerInvolved) defBond.active.forEach(bond => log(`守军羁绊触发：${bond.name}！${bond.desc}`));
+    }
+
     attack *= aMods.forceMul * aMods.atkMul * tactic.atk;
 
     // 水战加成
@@ -1224,6 +1383,10 @@
       addGeneralExp(mainGeneral, 15);
       if (defGeneral) addGeneralExp(defGeneral, 20);
       log(`${atkFaction.name} 的 ${army.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
+    }
+    if (playerInvolved) {
+      showBattleFx(victory ? '大捷！' : '败退', victory ? '' : 'defeat');
+      playSound(victory ? 'victory' : 'defeat');
     }
     checkAchievements();
   }
@@ -1314,6 +1477,28 @@
       </div>
       <div class="card"><h3>可招降武将</h3>
       ${enemyGens.length ? enemyGens.map(g => `<div style="margin:4px 0">${g.name} (${state.factions[g.faction].name}) 忠诚${g.loyalty} <button class="action" onclick="window.recruitGeneral('${g.name}')" ${p.gold < 500 ? 'disabled' : ''}>招降 (500金)</button></div>`).join('') : '<p>当前没有可招降武将</p>'}
+      </div>
+      <div class="card"><h3>武将羁绊</h3>
+      <p>将羁绊武将编入同一军团可触发组合技加成。</p>
+      ${(() => {
+        const ownedNames = new Set(myGens.map(g => g.name));
+        const activeInArmies = new Set();
+        factionArmies(state.playerId).forEach(a => {
+          BONDS.forEach(bond => {
+            if (bond.members.filter(n => a.generals.includes(n)).length >= (bond.require || bond.members.length)) activeInArmies.add(bond.id);
+          });
+        });
+        return BONDS.map(bond => {
+          const owned = bond.members.filter(n => ownedNames.has(n)).length;
+          const need = bond.require || bond.members.length;
+          const active = activeInArmies.has(bond.id);
+          const color = active ? 'var(--accent-green)' : (owned >= need ? 'var(--accent-orange)' : 'var(--muted)');
+          return `<div style="margin:4px 0;padding:6px;border:1px solid var(--border);border-radius:4px;background:${active?'#f0fff0':'var(--bg)'};color:${color}">
+            <b>${active ? '★ ' : ''}${bond.name}</b>（${bond.members.join(' / ')}）${active ? '已触发' : `${owned}/${need}`}<br/>
+            <span style="font-size:0.8rem;color:var(--muted)">${bond.desc}</span>
+          </div>`;
+        }).join('');
+      })()}
       </div>
       <div class="card"><h3>我方武将</h3>
       <table><tr><th>姓名</th><th>等级</th><th>经验</th><th>武力</th><th>智力</th><th>统率</th><th>政治</th><th>忠诚</th><th>特技</th><th>装备</th><th>状态</th></tr>
@@ -1725,6 +1910,116 @@
     renderHeader(); renderSidebar(); renderContent(); renderLogs();
   }
 
+  // ---------- 音效 ----------
+  let audioCtx = null;
+  function initAudio() {
+    if (audioCtx) return;
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audioCtx = null; }
+  }
+  function playTone(freq, type, duration, delay) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + (delay || 0);
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(0.08, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + duration);
+    o.start(t);
+    o.stop(t + duration);
+  }
+  function playSound(name) {
+    initAudio();
+    if (name === 'attack') {
+      playTone(130, 'sawtooth', 0.12, 0);
+      playTone(90, 'sawtooth', 0.18, 0.1);
+    } else if (name === 'victory') {
+      playTone(523, 'sine', 0.18, 0);
+      playTone(659, 'sine', 0.18, 0.15);
+      playTone(784, 'sine', 0.35, 0.3);
+    } else if (name === 'defeat') {
+      playTone(300, 'sawtooth', 0.3, 0);
+      playTone(200, 'sawtooth', 0.4, 0.2);
+    } else if (name === 'achievement') {
+      playTone(880, 'sine', 0.1, 0);
+      playTone(1109, 'sine', 0.2, 0.1);
+    } else if (name === 'march') {
+      playTone(80, 'triangle', 0.2, 0);
+      playTone(80, 'triangle', 0.2, 0.18);
+    }
+  }
+
+  // ---------- 战斗动画 ----------
+  function showBattleFx(text, cls) {
+    const fx = document.getElementById('battle-fx');
+    if (!fx) return;
+    fx.innerHTML = `<div class="fx-text ${cls || ''}">${text}</div>`;
+    fx.classList.add('active');
+    document.body.classList.add('battle-shake');
+    setTimeout(() => { fx.classList.remove('active'); document.body.classList.remove('battle-shake'); }, 650);
+  }
+
+  // ---------- 新手引导步骤化 ----------
+  const TUTORIAL_STEPS = [
+    { title: '欢迎来到《三国风云·轻量 SLG》', msg: '你扮演刘备，目标是统一天下。本引导将带你熟悉核心界面。', target: null },
+    { title: '资源概览', msg: '顶部显示粮食、金钱、兵力与士气。这些资源决定你能养多少兵、升多少科技。', target: '#h-res' },
+    { title: '功能导航', msg: '左侧按钮可切换内政、军事、人才、外交、地图、事件、成就和日志。', target: '#sidebar' },
+    { title: '内政经营', msg: '开垦农田、发展商业、招兵买马、研发科技、颁布政策，是势力发展的根基。', target: '#content', tab: 'internal' },
+    { title: '军事出征', msg: '组建军团并分配步骑弓，选择合适战术攻占相邻城池。围城耗坚城，火攻/埋伏需高智力主将。', target: '#content', tab: 'military' },
+    { title: '人才养成', msg: '寻访武将、招降敌将、装备养成、战斗升级。羁绊武将同军团可触发组合技。', target: '#content', tab: 'talent' },
+    { title: '外交纵横', msg: '与强敌结盟争取时间，对弱敌宣战扩张，也可离间敌方武将。', target: '#content', tab: 'diplomacy' },
+    { title: '天下地图', msg: '点击地图城池可快速切换军事面板，观察局势一目了然。', target: '#content', tab: 'map' },
+    { title: '事件处理', msg: '及时处理随机事件和历史事件，选择最适合当前局势的选项。', target: '#content', tab: 'events' },
+    { title: '准备就绪', msg: '每回合结束会结算资源并触发 AI 行动。现在点击「结束回合」开始你的征程吧！', target: '#sidebar' }
+  ];
+
+  window.showTutorialStep = () => {
+    if (!state.tutorial) return;
+    const idx = state.tutorialStep || 0;
+    const step = TUTORIAL_STEPS[idx];
+    if (!step) { window.closeTutorial(); return; }
+    if (step.tab) window.switchTab(step.tab);
+    const overlay = document.getElementById('tutorial');
+    const box = document.getElementById('tutorial-box');
+    document.querySelectorAll('.tutorial-target').forEach(el => el.classList.remove('tutorial-target'));
+    if (step.target) {
+      const el = document.querySelector(step.target);
+      if (el) el.classList.add('tutorial-target');
+    }
+    const isLast = idx >= TUTORIAL_STEPS.length - 1;
+    box.innerHTML = `
+      <h2>${step.title}</h2>
+      <p>${step.msg}</p>
+      <div style="margin-top:16px">
+        ${idx > 0 ? '<button class="action" onclick="window.prevTutorialStep()">上一步</button>' : ''}
+        <button class="action" onclick="window.nextTutorialStep()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">${isLast ? '开始征程' : '下一步'}</button>
+        <button class="action" onclick="window.skipTutorial()">跳过</button>
+      </div>
+      <div style="margin-top:8px;font-size:0.8rem;color:var(--muted)">步骤 ${idx + 1} / ${TUTORIAL_STEPS.length}</div>`;
+    overlay.style.display = 'flex';
+  };
+
+  window.nextTutorialStep = () => {
+    state.tutorialStep = (state.tutorialStep || 0) + 1;
+    if (state.tutorialStep >= TUTORIAL_STEPS.length) window.closeTutorial();
+    else window.showTutorialStep();
+  };
+
+  window.prevTutorialStep = () => {
+    state.tutorialStep = Math.max(0, (state.tutorialStep || 0) - 1);
+    window.showTutorialStep();
+  };
+
+  window.skipTutorial = () => {
+    state.tutorial = false;
+    state.tutorialStep = 0;
+    document.getElementById('tutorial').style.display = 'none';
+    document.querySelectorAll('.tutorial-target').forEach(el => el.classList.remove('tutorial-target'));
+    saveAuto();
+  };
+
   window.nextTurn = ()=>{
     if(state.gameOver) return;
     state.month++; state.turn++;
@@ -1879,7 +2174,8 @@
           if(gen){
             usedGenerals.add(gen.name);
             const use = Math.min(f.troops, Math.max(500, Math.floor(atk.to.troops*1.2)));
-            battle(f.id, atk.to.owner||'neutral', gen, use, atk.to, 'infantry');
+            const troopType = chooseAITroopType(gen, atk.to);
+            battle(f.id, atk.to.owner||'neutral', gen, use, atk.to, troopType);
             if(Math.random()<0.7) break;
           }
         }
@@ -1896,14 +2192,16 @@
     cities.forEach(city=>{
       const stationed = myArmies.filter(a=>a.city===city.name);
       if(stationed.length===0 && city.troops>=500){
-        const gens = availableGenerals(f.id).filter(g=>g.faction===f.id && !g.injured).sort((a,b)=>b.force-a.force).slice(0,3).map(g=>g.name);
         const use = Math.min(city.troops, 1500);
-        state.armies.push({id:state.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, infantry:Math.floor(use*0.6), cavalry:Math.floor(use*0.25), archer:Math.floor(use*0.15)});
+        const comp = getOptimalAIComp(f, city, use);
+        const gens = pickAIGenerals(f, comp.hint);
+        state.armies.push({id:state.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, infantry:comp.infantry, cavalry:comp.cavalry, archer:comp.archer});
         city.troops -= use;
       } else if(stationed.length && city.troops>=300){
         const a = stationed[0];
         const add = Math.min(city.troops-200, 500);
-        a.infantry += Math.floor(add*0.6); a.cavalry += Math.floor(add*0.25); a.archer += Math.floor(add*0.15);
+        const comp = getOptimalAIComp(f, city, add);
+        a.infantry += comp.infantry; a.cavalry += comp.cavalry; a.archer += comp.archer;
         city.troops -= add;
       }
     });
@@ -1997,7 +2295,19 @@
       }
     });
     newlyUnlocked.forEach(ach => log(`成就解锁：${ach.name} — ${ach.desc}`));
+    if (newlyUnlocked.length) {
+      playSound('achievement');
+      showAchievementPop(newlyUnlocked[0]);
+    }
     return newlyUnlocked;
+  }
+
+  function showAchievementPop(ach) {
+    const pop = document.createElement('div');
+    pop.className = 'achievement-pop';
+    pop.innerHTML = `<b>成就解锁</b><br/>${ach.name}<br/><span style="font-size:0.8rem;color:var(--muted)">${ach.desc}</span>`;
+    document.body.appendChild(pop);
+    setTimeout(() => { pop.remove(); }, 3200);
   }
 
   // 事件链：某些事件触发后开启后续事件
@@ -2066,8 +2376,35 @@
     });
   }
 
+  function tryTriggerHistoricalEvent(evId) {
+    const ev = EVENTS.find(e => e.id === evId);
+    if (!ev) return;
+    const cities = factionCities(state.playerId);
+    if (!cities.length) return;
+    const city = cities[Math.floor(Math.random() * cities.length)];
+    const ctx = { state, faction: player(), city };
+    if (ev.condition && !ev.condition(ctx)) return;
+    addPendingEvent(ev, ctx);
+  }
+
   function historicalEvents() {
     const y = state.year;
+    // 董卓乱政
+    if(y===1 && !state.eventsTriggered.dongzhuoRebellion){
+      state.eventsTriggered.dongzhuoRebellion=true;
+      Object.values(state.factions).forEach(f=>{
+        if(!f.eliminated){ f.gold = Math.floor(f.gold*0.85); f.food = Math.floor(f.food*0.85); }
+      });
+      log('董卓乱政：洛阳焚毁，天下群雄资源受损，讨伐之声四起。');
+    }
+    // 煮酒论英雄
+    if(y>=2 && y<=4 && state.playerId==='liu' && !state.eventsTriggered.cookingWine && state.factions.cao && !state.factions.cao.eliminated){
+      tryTriggerHistoricalEvent('cooking_wine');
+    }
+    // 十八路诸侯讨董
+    if(y>=1 && y<=2 && !state.eventsTriggered.coalitionDongzhuo){
+      tryTriggerHistoricalEvent('coalition_dongzhuo');
+    }
     // Yellow Turban
     if(y>=2 && y<=4 && !state.eventsTriggered.yellowTurban && Math.random()<0.25){
       state.eventsTriggered.yellowTurban=true;
@@ -2096,6 +2433,21 @@
     if(y>=6 && y<=8 && !state.eventsTriggered.chibi){
       state.eventsTriggered.chibi=true;
       log('赤壁之战：曹操南征，孙刘联盟抗曹！');
+      if(state.factions.cao && !state.factions.cao.eliminated){
+        state.factions.cao.troops = Math.floor(state.factions.cao.troops*0.7);
+        state.factions.cao.food = Math.floor(state.factions.cao.food*0.8);
+        log('赤壁大火：曹操水军损失惨重，南征受挫。');
+      }
+    }
+    // 夷陵之战
+    if(y>=12 && y<=16 && state.playerId==='liu' && !state.eventsTriggered.yiling && state.factions.sun && !state.factions.sun.eliminated){
+      const jz = findCity('荆州');
+      if(jz && jz.owner==='sun') tryTriggerHistoricalEvent('yiling_battle');
+    }
+    // 南中平定
+    if(y>=10 && y<=18 && !state.eventsTriggered.sevenCaptures){
+      const ownedSouth = ['成都','永安','建宁','云南'].filter(n=>{ const c=findCity(n); return c && c.owner===state.playerId; }).length;
+      if(ownedSouth>=2) tryTriggerHistoricalEvent('seven_captures');
     }
     // Diyi shijinzhou
     if(y>=8 && y<=12 && !state.eventsTriggered.jingzhouLost){
@@ -2135,8 +2487,16 @@
       if(sf && !sf.eliminated && Math.random()<0.2){
         state.eventsTriggered.sanguiguijin=true;
         log(`三国归晋：司马氏篡${sf.name}，天下终归晋朝！`);
-        state.gameOver=true; state.winner=smy.faction;
+        state.gameOver=true; state.winner=smy.faction; state.endingTitle='三国归晋：天下终归司马氏';
       }
+    }
+    // 长期僵局结局
+    if(y>=30 && !state.gameOver){
+      const alive = Object.values(state.factions).filter(f=>!f.eliminated);
+      const top = alive.slice().sort((a,b)=>factionCities(b.id).length-factionCities(a.id).length)[0];
+      state.gameOver=true; state.winner=top?top.id:null;
+      state.endingTitle='天下三分：群雄割据，终究无人能一统';
+      log(state.endingTitle);
     }
   }
 
@@ -2310,12 +2670,12 @@
     const p = player();
     const total = state.cities.length;
     const mine = factionCities(state.playerId).length;
-    if(mine>=Math.ceil(total*0.85)){ state.gameOver=true; state.winner=state.playerId; log('统一天下！你赢得了胜利！'); return; }
+    if(mine>=Math.ceil(total*0.85)){ state.gameOver=true; state.winner=state.playerId; state.endingTitle='统一天下：你赢得了胜利！'; log(state.endingTitle); return; }
     // 灭亡判定：无城池且无可作战军团（含预备役+军团兵力）才判负
     const armyTotal = factionArmies(state.playerId).reduce((s,a)=>s+armyTroopTotal(a),0);
     const allForces = p.troops + factionCities(state.playerId).reduce((s,c)=>s+c.troops,0) + armyTotal;
     if((mine===0 && armyTotal===0) || (mine===0 && p.food<=0 && p.gold<=0 && allForces<=0)){
-      state.gameOver=true; state.winner=null; log('你的势力覆灭了。');
+      state.gameOver=true; state.winner=null; state.endingTitle='你的势力覆灭了。'; log(state.endingTitle);
     }
   }
 
@@ -2457,6 +2817,8 @@
     if(!state.achievements) state.achievements = {};
     if(!state.stats) state.stats = { wins: 0, battles: 0, generalsDefeated: 0, citiesLost: 0, eventsResolved: 0 };
     if(!state.eventChains) state.eventChains = {};
+    if(state.tutorialStep===undefined) state.tutorialStep = 0;
+    if(state.endingTitle===undefined) state.endingTitle = null;
     // 兼容旧武将：补齐经验、等级、装备
     state.generals.forEach(g=>{
       if(g.exp===undefined) g.exp=0;
