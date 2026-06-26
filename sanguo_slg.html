@@ -193,6 +193,21 @@
     cavalry: { name: '骑兵', atk: 1.2, def: 1.0, food: 1.5 },
     archer: { name: '弓兵', atk: 1.0, def: 1.0, food: 1.1, siegeAtk: 1.15 }
   };
+  // 兵种循环克制：骑兵克步兵、步兵克弓兵、弓兵克骑兵
+  const COUNTER = { cavalry: 'infantry', infantry: 'archer', archer: 'cavalry' };
+  const COUNTER_BONUS = 0.2;
+  // 城池守军兵种构成（按城防：坚城弓兵多利于守城）
+  function cityDefenseComp(city) {
+    return city.defense >= 1.3
+      ? { infantry: 0.5, cavalry: 0.15, archer: 0.35 }
+      : { infantry: 0.6, cavalry: 0.25, archer: 0.15 };
+  }
+  // 攻方兵种比例克制守方兵种比例的系数（0~1）
+  function counterFactor(atkShare, defShare) {
+    return (atkShare.infantry || 0) * (defShare.archer || 0)
+         + (atkShare.archer || 0) * (defShare.cavalry || 0)
+         + (atkShare.cavalry || 0) * (defShare.infantry || 0);
+  }
   const SKILL_NAMES = {
     wusheng:'武圣', paoxiao:'咆哮', longdan:'龙胆', shensuan:'神算', jianxiong:'奸雄',
     qixi:'奇袭', lianying:'连营', baonu:'暴怒', tianming:'天命', huoji:'火计'
@@ -248,7 +263,15 @@
       ['庞统','free',35,97,80,88,'shensuan'],
       ['黄忠','free',93,62,85,55,''],
       ['马超','free',96,48,88,45,''],
-      ['魏延','free',90,55,82,50,'']
+      ['魏延','free',90,55,82,50,''],
+      // 黄巾军武将（黄巾起义事件触发后归 huangjin）
+      ['张角','huangjin',55,92,80,85,'shensuan'],
+      ['张宝','huangjin',70,75,72,60,'huoji'],
+      ['张梁','huangjin',68,68,70,55,''],
+      ['管亥','huangjin',84,40,72,38,''],
+      ['廖化','huangjin',72,55,68,50,''],
+      ['周仓','huangjin',78,38,66,35,''],
+      ['裴元绍','huangjin',70,35,62,33,'']
     ];
     return data.map(([n,f,fo,i,c,p,s],idx)=>({id:idx,name:n,faction:f,force:fo,intelligence:i,command:c,politics:p,loyalty:f==='free'?60:85,skill:s||null,injured:0,injuredTurns:0}));
   }
@@ -351,7 +374,14 @@
     renderAll();
   }
 
-  function getSeason() { return SEASONS[(state.month-1)%4]; }
+  function getSeason() {
+    // 按真实四季分段：春3-5、夏6-8、秋9-11、冬12-2
+    const m = state.month;
+    if (m >= 3 && m <= 5) return '春';
+    if (m >= 6 && m <= 8) return '夏';
+    if (m >= 9 && m <= 11) return '秋';
+    return '冬';
+  }
   function player() { return state.factions[state.playerId]; }
   function factionCities(fid) { return state.cities.filter(c=>c.owner===fid); }
   function factionGenerals(fid) { return state.generals.filter(g=>g.faction===fid); }
@@ -589,7 +619,8 @@
     if(target.owner===state.playerId) { alert('不能攻击己方城池'); return; }
     if(target.owner && relation(state.playerId,target.owner)>=80) { alert('不能攻击盟友'); return; }
     const fromCity = army.city ? findCity(army.city) : factionCities(state.playerId)[0];
-    if(!fromCity || !fromCity.neighbors.includes(target.name)) { alert('目标不相邻'); return; }
+    if(!fromCity || fromCity.owner!==state.playerId) { alert('军团驻扎城已丢失，请重新驻防'); return; }
+    if(!fromCity.neighbors.includes(target.name)) { alert('目标不相邻'); return; }
     if(armyTroopTotal(army)<100) { alert('军团兵力不足'); return; }
     const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
     if(mainGeneral && mainGeneral.injured) { alert('主将受伤中'); return; }
@@ -617,10 +648,16 @@
     if(mainGeneral && mainGeneral.skill && SKILLS[mainGeneral.skill] && typeof SKILLS[mainGeneral.skill].battle==='function') SKILLS[mainGeneral.skill].battle(aMods,dMods);
     attack *= aMods.forceMul * aMods.atkMul;
 
+    // 兵种克制：攻方兵种构成 vs 守方城池兵种构成
+    const atkShare = { infantry: army.infantry/total, cavalry: army.cavalry/total, archer: army.archer/total };
+    const defComp = cityDefenseComp(targetCity);
+    attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));   // 攻方克制守方
+
     const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
     if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
 
     let defense = targetCity.troops * 1.2 * targetCity.defense * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+    defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));   // 守方克制攻方
     if(defGeneral) defense *= (0.5 + defGeneral.command/200);
     if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
     if(state.eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && state.factions.sun.allies.includes('liu')) attack*=0.7;
@@ -636,6 +673,8 @@
       army.archer = Math.floor(army.archer * keepRatio);
       targetCity.troops = garrison;
       const oldOwner = targetCity.owner;
+      // 遣散守方驻扎在失城的军团（避免幽灵军团从敌城出兵）
+      disbandArmiesAt(targetCity.name, oldOwner);
       targetCity.owner = attackerId;
       targetCity.morale = Math.max(30, targetCity.morale - 20);
       army.city = targetCity.name;
@@ -671,14 +710,14 @@
     const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
     if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle === 'function') SKILLS[defGeneral.skill].battle(dMods,aMods);
     let attack = atkTroops * (0.5 + general.force/200 * aMods.forceMul) * (0.5 + general.command/200) * troopType.atk * aMods.atkMul;
-    // Counter bonus
-    const defTroopTypeKey = 'infantry';
-    if(troopTypeKey==='cavalry' && defTroopTypeKey==='archer') attack*=1.2;
-    if(troopTypeKey==='archer' && defTroopTypeKey==='infantry') attack*=1.2;
-    if(troopTypeKey==='infantry' && defTroopTypeKey==='cavalry') attack*=1.2;
     // Siege bonus for archer
     if(troopTypeKey==='archer') attack *= troopType.siegeAtk;
+    // 兵种克制：攻方单兵种 vs 守方城池兵种构成
+    const atkShare = { infantry: troopTypeKey==='infantry'?1:0, cavalry: troopTypeKey==='cavalry'?1:0, archer: troopTypeKey==='archer'?1:0 };
+    const defComp = cityDefenseComp(targetCity);
+    attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));   // 攻方克制守方
     let defense = targetCity.troops * 1.2 * targetCity.defense * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+    defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));   // 守方克制攻方
     if(defGeneral) defense *= (0.5 + defGeneral.command/200);
     if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
     if(state.eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && state.factions.sun.allies.includes('liu')) attack*=0.7;
@@ -693,6 +732,7 @@
       atkFaction.troops += survivors - garrison;          // 其余存活兵力归还预备役
       targetCity.troops = garrison;
       const oldOwner = targetCity.owner;
+      disbandArmiesAt(targetCity.name, oldOwner);
       targetCity.owner = attackerId;
       targetCity.morale = Math.max(30, targetCity.morale - 20);
       // 奸雄：战胜双倍金钱（攻方主将特技）
@@ -738,6 +778,15 @@
 
   function removeGeneralFromArmies(name) {
     state.armies.forEach(a=>{ a.generals = a.generals.filter(n=>n!==name); });
+  }
+
+  // 城池易主时，把守方驻扎在该城的军团遣散（兵力归零、释放武将），避免幽灵军团从敌城出兵
+  function disbandArmiesAt(cityName, factionId) {
+    if(!factionId || factionId==='neutral') return;
+    state.armies = state.armies.filter(a=>{
+      if(a.faction===factionId && a.city===cityName){ return false; }   // 遣散该军团
+      return true;
+    });
   }
 
   window.recruitGeneral = (name)=>{
@@ -1042,10 +1091,10 @@
       }
       // 预备役上限：按城池数量独立计算（不再反向依赖守军）
       f.troops = Math.min(f.troops, cities.length*3000);
-      // Food consumption for field armies
+      // Food consumption for field armies（每百人按兵种消耗：步20/骑30/弓22）
       const myArmies = factionArmies(f.id);
       myArmies.forEach(a=>{
-        const foodNeed = Math.floor(armyTroopTotal(a)/100) * (a.infantry*1 + a.cavalry*1.5 + a.archer*1.1) / armyTroopTotal(a) * 20;
+        const foodNeed = (Math.floor(a.infantry/100)*20 + Math.floor(a.cavalry/100)*30 + Math.floor(a.archer/100)*22);
         f.food -= foodNeed;
       });
     });
@@ -1112,10 +1161,13 @@
         });
       });
       targets.sort((a,b)=>a.to.troops-b.to.troops);
+        const usedGenerals = new Set();
         for(const atk of targets){
         if(f.troops>atk.to.troops*0.8 && f.troops>500){
-          const gen = factionGenerals(f.id).filter(g=>!g.injured).sort((a,b)=>b.force-a.force)[0];
+          // 选未受伤且未在本回合出战的武将（排除已在军团中的）
+          const gen = availableGenerals(f.id).filter(g=>!g.injured && !usedGenerals.has(g.name)).sort((a,b)=>b.force-a.force)[0];
           if(gen){
+            usedGenerals.add(gen.name);
             const use = Math.min(f.troops, Math.max(500, Math.floor(atk.to.troops*1.2)));
             battle(f.id, atk.to.owner||'neutral', gen, use, atk.to, 'infantry');
             if(Math.random()<0.7) break;
@@ -1153,7 +1205,7 @@
       const targets = [];
       myArmies.forEach(a=>{
         const city = a.city ? findCity(a.city) : null;
-        if(!city) return;
+        if(!city || city.owner!==f.id) return;   // 校验驻扎城仍属本势力，避免从敌城出兵
         city.neighbors.forEach(n=>{
           const t = findCity(n);
           if(t && t.owner!==f.id && (!t.owner || relation(f.id,t.owner)<80)){
@@ -1185,7 +1237,7 @@
         const c = free[Math.floor(Math.random()*free.length)];
         c.owner='huangjin'; c.troops=3000; c.morale=50;
         state.factions.huangjin = {id:'huangjin',name:'黄巾军',color:'#d4af37',leader:'张角',personality:'expansion',ai:true,food:500,gold:200,troops:0,morale:60,allies:[],eliminated:false};
-        state.relations.huangjin={}; Object.keys(state.factions).forEach(k=>{state.relations.huangjin[k]=-50;state.relations[k].huangjin=-50;});
+        state.relations.huangjin={}; Object.keys(state.factions).forEach(k=>{ if(k==='huangjin'){state.relations.huangjin.huangjin=100;} else {state.relations.huangjin[k]=-50;state.relations[k].huangjin=-50;} });
         log(`黄巾起义爆发！张角占据 ${c.name}，建立黄巾军势力！`);
       }
     }
@@ -1210,17 +1262,21 @@
     if(y>=8 && y<=12 && !state.eventsTriggered.jingzhouLost){
       const guanyu = findGeneral('关羽');
       const jz = findCity('荆州');
-      if(guanyu && guanyu.faction==='liu' && jz.owner==='liu' && Math.random()<0.2){
+      if(guanyu && guanyu.faction==='liu' && jz.owner==='liu' && state.factions.sun && !state.factions.sun.eliminated && Math.random()<0.2){
         state.eventsTriggered.jingzhouLost=true;
         jz.owner='sun'; jz.troops=Math.floor(jz.troops*0.7);
         log(`大意失荆州：孙权偷袭荆州，关羽败走麦城！`);
       }
     }
     // Baimenlou
-    if(y>=5 && y<=8 && !state.eventsTriggered.baimenlou && state.factions.lv && !state.factions.lv.eliminated){
+    if(y>=5 && y<=8 && !state.eventsTriggered.baimenlou && state.factions.lv && !state.factions.lv.eliminated && state.factions.cao && !state.factions.cao.eliminated){
       if(Math.random()<0.25){
         state.eventsTriggered.baimenlou=true;
         factionCities('lv').forEach(c=>{c.owner='cao';c.morale=50;});
+        // 吕布势力灭亡：清理其军团，避免幽灵势力卡住武将
+        state.armies = state.armies.filter(a=>a.faction!=='lv');
+        state.factions.lv.eliminated = true;
+        state.factions.lv.ai = false;
         log('白门楼：吕布兵败被杀，城池尽归曹操！');
       }
     }
@@ -1253,7 +1309,7 @@
       c.food += 50; log(`丰收：${c.name} 粮食大增`);
     }else if(r<0.35){
       const c = cities[Math.floor(Math.random()*cities.length)];
-      c.troops = Math.max(0, c.troops-300); c.morale-=10; log(`瘟疫：${c.name} 守军大损`);
+      c.troops = Math.max(0, c.troops-300); c.morale=Math.max(0,c.morale-10); log(`瘟疫：${c.name} 守军大损`);
     }else if(r<0.5){
       const c = cities[Math.floor(Math.random()*cities.length)];
       c.troops = Math.max(0, c.troops-200); log(`山贼袭扰：${c.name} 守军减少`);
@@ -1268,9 +1324,12 @@
   function checkEliminations() {
     Object.values(state.factions).forEach(f=>{
       if(f.eliminated || f.id===state.playerId) return;
-      if(factionCities(f.id).length===0 && factionArmies(f.id).length===0){
+      if(factionCities(f.id).length===0){
+        // 失去所有城池即灭亡：残余军团兵力归零并清理，避免幽灵军团卡住武将
+        state.armies = state.armies.filter(a=>a.faction!==f.id);
         f.eliminated = true;
         f.ai = false;
+        f.troops = 0;
         // 从所有势力的盟友列表中移除
         Object.values(state.factions).forEach(o=>{ o.allies = o.allies.filter(a=>a!==f.id); });
         log(`${f.name} 势力已彻底灭亡，退出群雄之争。`);
@@ -1283,7 +1342,10 @@
     const total = state.cities.length;
     const mine = factionCities(state.playerId).length;
     if(mine>=Math.ceil(total*0.85)){ state.gameOver=true; state.winner=state.playerId; log('统一天下！你赢得了胜利！'); return; }
-    if(mine===0 || (p.food<=0 && p.gold<=0 && p.troops<=0)){
+    // 灭亡判定：无城池且无可作战军团（含预备役+军团兵力）才判负
+    const armyTotal = factionArmies(state.playerId).reduce((s,a)=>s+armyTroopTotal(a),0);
+    const allForces = p.troops + factionCities(state.playerId).reduce((s,c)=>s+c.troops,0) + armyTotal;
+    if((mine===0 && armyTotal===0) || (mine===0 && p.food<=0 && p.gold<=0 && allForces<=0)){
       state.gameOver=true; state.winner=null; log('你的势力覆灭了。');
     }
   }
@@ -1306,7 +1368,7 @@
       deserializeState(JSON.parse(data));
       log('游戏已读取。');
       renderAll();
-    }catch(e){ log('读档失败：'+e.message); }
+    }catch(e){ log('读档失败：'+e.message); renderAll(); }
   };
 
   function serializeState() {
@@ -1334,6 +1396,12 @@
         if(state.relations[a][b]===undefined) state.relations[a][b]=a===b?100:20;
       });
     });
+    // 兼容旧存档：补齐可能缺失的字段，避免读档即崩
+    if(!state.tech) state.tech = {farmBonus:0, commBonus:0, recruitBonus:0};
+    if(!state.eventsTriggered) state.eventsTriggered = {};
+    if(state.yellowTurban===undefined) state.yellowTurban = false;
+    if(!Array.isArray(state.logs)) state.logs = [];
+    if(!state.gameOver) state.gameOver = false;
   }
 
   window.onerror = (msg)=>{ log('系统错误：'+msg); return true; };
