@@ -238,6 +238,125 @@
     huoji: { name: '火计', desc: '攻城时守军额外损失10%', fire: 0.1 }
   };
 
+  // 事件模板：weight 权重，condition 触发条件，type 类型(auto/choice)，choices 玩家选项
+  const EVENTS = [
+    {
+      id:'harvest', title:'丰收', type:'auto', weight:2,
+      condition:()=>true,
+      desc:(ctx)=>`${ctx.city.name} 风调雨顺，粮食丰收。`,
+      effect:(ctx)=>{ ctx.city.food += 30+Math.floor(Math.random()*21); ctx.city.morale = Math.min(100, ctx.city.morale+5); }
+    },
+    {
+      id:'famine', title:'饥荒', type:'auto', weight:1.5,
+      condition:()=>true,
+      desc:(ctx)=>`${ctx.city.name} 遭遇饥荒，民不聊生。`,
+      effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-40); ctx.city.morale = Math.max(20, ctx.city.morale-10); }
+    },
+    {
+      id:'plague', title:'瘟疫', type:'auto', weight:1,
+      condition:()=>true,
+      desc:(ctx)=>`${ctx.city.name} 爆发瘟疫，守军与民夫大量病亡。`,
+      effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-200-Math.floor(Math.random()*200)); ctx.city.morale = Math.max(20, ctx.city.morale-15); }
+    },
+    {
+      id:'bandits', title:'山贼袭扰', type:'auto', weight:1.5,
+      condition:()=>true,
+      desc:(ctx)=>`${ctx.city.name} 周边山贼袭扰，守军疲于应付。`,
+      effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-150-Math.floor(Math.random()*100)); ctx.city.money = Math.max(0, ctx.city.money-20); }
+    },
+    {
+      id:'merchant', title:'商旅云集', type:'choice', weight:1.2,
+      condition:(ctx)=>ctx.faction.gold>=100,
+      desc:(ctx)=>`商旅路过 ${ctx.city.name}，愿以粮食换金钱。`,
+      choices:[
+        {label:'交易（200金换300粮）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food+=300; return '你购买了粮食。'; }},
+        {label:'拒绝', effect:(ctx)=>'你礼貌地送走了商队。'}
+      ]
+    },
+    {
+      id:'stranger', title:'隐士献策', type:'choice', weight:0.8,
+      condition:(ctx)=>true,
+      desc:(ctx)=>`一名隐士求见，自称有治国良策。`,
+      choices:[
+        {label:'厚礼相待（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; const t=['farmBonus','commBonus','recruitBonus'][Math.floor(Math.random()*3)]; ctx.state.tech[t]+=(t==='recruitBonus'?20:10); return `隐士献计，${t==='farmBonus'?'农业':t==='commBonus'?'商业':'募兵'}科技提升。`; }},
+        {label:'驱逐', effect:(ctx)=>'你赶走了这个来历不明的人。'}
+      ]
+    },
+    {
+      id:'defector', title:'敌将投诚', type:'choice', weight:0.6,
+      condition:(ctx)=>{
+        const enemies = state.generals.filter(g=>g.faction!=='free' && g.faction!==ctx.faction.id && g.loyalty<50);
+        return enemies.length>0;
+      },
+      desc:(ctx)=>{ ctx.general = state.generals.filter(g=>g.faction!=='free' && g.faction!==ctx.faction.id && g.loyalty<50)[0]; return `${ctx.general.name} 有意脱离 ${state.factions[ctx.general.faction].name} 投奔于你。`; },
+      choices:[
+        {label:'接纳（500金）', condition:(ctx)=>ctx.faction.gold>=500, effect:(ctx)=>{ ctx.faction.gold-=500; ctx.general.faction=ctx.faction.id; ctx.general.loyalty=70; return `${ctx.general.name} 已加入麾下。`; }},
+        {label:'送还', effect:(ctx)=>{ setRelation(ctx.faction.id, ctx.general.faction, relation(ctx.faction.id, ctx.general.faction)+10); return `你送还 ${ctx.general.name}，双方关系缓和。`; }}
+      ]
+    },
+    {
+      id:'duel', title:'武将挑战', type:'choice', weight:0.7,
+      condition:(ctx)=>{
+        const gens = availableGenerals(ctx.faction.id);
+        return gens.length>0;
+      },
+      desc:(ctx)=>{ ctx.general = availableGenerals(ctx.faction.id)[0]; return `${ctx.general.name} 在 ${ctx.city.name} 摆下擂台，是否允许民间武者挑战？`; },
+      choices:[
+        {label:'准许', effect:(ctx)=>{ if(Math.random()<0.6){ ctx.city.morale = Math.min(100, ctx.city.morale+10); return '比武振奋民心，民心提升。'; } else { ctx.general.injured=1; ctx.general.injuredTurns=1; return `${ctx.general.name} 不慎受伤。`; } }},
+        {label:'禁止', effect:(ctx)=>{ ctx.city.morale = Math.max(20, ctx.city.morale-3); return '禁止比武让武者不满。'; }}
+      ]
+    },
+    {
+      id:'rebellion', title:'民变', type:'choice', weight:0.8,
+      condition:(ctx)=>ctx.city.morale<50,
+      desc:(ctx)=>`${ctx.city.name} 民心不稳，有刁民聚众闹事。`,
+      choices:[
+        {label:'安抚（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.morale = Math.min(100, ctx.city.morale+20); return '安抚有效，民心回升。'; }},
+        {label:'镇压', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-100); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '叛乱被镇压，但民心更差。'; }}
+      ]
+    },
+    {
+      id:'hermit_general', title:'寻访隐士', type:'choice', weight:0.5,
+      condition:(ctx)=>true,
+      desc:(ctx)=>`传闻 ${ctx.city.name} 附近有隐士高人。`,
+      choices:[
+        {label:'寻访（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; const free = state.generals.filter(g=>g.faction==='free'); if(free.length && Math.random()<0.5){ const g=free[Math.floor(Math.random()*free.length)]; g.faction=ctx.faction.id; g.loyalty=70; return `寻访到 ${g.name}，已加入麾下。`; } return '寻访未果。'; }},
+        {label:'放弃', effect:(ctx)=>'你专注于军政要务。'}
+      ]
+    },
+    {
+      id:'nomad_invasion', title:'蛮族入侵', type:'choice', weight:0.6,
+      condition:(ctx)=>{
+        const border = ctx.faction.id==='yuan' || ctx.faction.id==='cao';
+        return border && ctx.city.troops<2000;
+      },
+      desc:(ctx)=>`北方蛮族骑兵出现在 ${ctx.city.name} 郊外。`,
+      choices:[
+        {label:'派兵征讨', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-300); return '你击退了蛮族，但守军受损。'; }},
+        {label:'缴纳岁币（400金）', condition:(ctx)=>ctx.faction.gold>=400, effect:(ctx)=>{ ctx.faction.gold-=400; return '蛮族拿着财物退走。'; }},
+        {label:'放任', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-500); ctx.city.money = Math.max(0, ctx.city.money-50); return '蛮族劫掠后离去。'; }}
+      ]
+    },
+    {
+      id:'season_spring', title:'春耕', type:'auto', weight:0,
+      condition:(ctx)=>getSeason()==='春',
+      desc:(ctx)=>`春意盎然，各地忙于春耕。`,
+      effect:(ctx)=>{ ctx.faction.food += factionCities(ctx.faction.id).length * 30; }
+    },
+    {
+      id:'season_autumn', title:'秋收', type:'auto', weight:0,
+      condition:(ctx)=>getSeason()==='秋',
+      desc:(ctx)=>`秋高气爽，粮仓渐满。`,
+      effect:(ctx)=>{ ctx.faction.food += factionCities(ctx.faction.id).length * 50; }
+    },
+    {
+      id:'season_winter', title:'冬寒', type:'auto', weight:0,
+      condition:(ctx)=>getSeason()==='冬',
+      desc:(ctx)=>`寒冬腊月，士卒难耐。`,
+      effect:(ctx)=>{ ctx.faction.food -= factionCities(ctx.faction.id).length * 20; }
+    }
+  ];
+
   function makeGenerals() {
     const data = [
       ['刘备','liu',75,78,80,95,'tianming'],
@@ -379,6 +498,9 @@
       winner: null,
       tech: {farmBonus:0,commBonus:0,recruitBonus:0},
       eventsTriggered: {},
+      pendingEvents: [],
+      eventHistory: [],
+      eventIdSeq: 1,
       yellowTurban: false,
       armies: [],
       nextArmyId: 1
@@ -438,10 +560,16 @@
       {id:'talent',label:'人才'},
       {id:'diplomacy',label:'外交'},
       {id:'map',label:'地图'},
+      {id:'events',label:'事件'},
       {id:'logs',label:'日志'}
     ];
+    const pendingCount = state.pendingEvents.filter(e=>e.factionId===state.playerId).length;
     const sb = document.getElementById('sidebar');
-    sb.innerHTML = tabs.map(t=>`<button class="${selectedTab===t.id?'active':''}" onclick="window.switchTab('${t.id}')">${t.label}</button>`).join('') +
+    sb.innerHTML = tabs.map(t=>{
+      let badge = '';
+      if(t.id==='events' && pendingCount>0) badge = ` <span style="background:var(--accent-red);color:#fff;border-radius:50%;padding:2px 6px;font-size:0.7rem">${pendingCount}</span>`;
+      return `<button class="${selectedTab===t.id?'active':''}" onclick="window.switchTab('${t.id}')">${t.label}${badge}</button>`;
+    }).join('') +
       `<hr style="width:100%;border-color:var(--border)">` +
       `<button onclick="window.saveGame()">保存游戏</button>` +
       `<button onclick="window.exportEncryptedSave()">导出加密存档</button>` +
@@ -465,6 +593,7 @@
       case 'talent': renderTalent(c); break;
       case 'diplomacy': renderDiplomacy(c); break;
       case 'map': renderMap(c); break;
+      case 'events': renderEvents(c); break;
       case 'logs': renderLogPage(c); break;
     }
   }
@@ -1056,6 +1185,42 @@
     });
   }
 
+  function renderEvents(c) {
+    const pending = state.pendingEvents.filter(e => e.factionId === state.playerId);
+    let html = `<div class="card"><h3>待处理事件</h3>`;
+    if (pending.length === 0) {
+      html += `<p>当前没有待处理事件。</p>`;
+    } else {
+      pending.forEach(evt => {
+        html += `<div style="margin:8px 0;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg)">
+          <b>${evt.title}</b>
+          <p style="margin:4px 0;color:var(--text)">${evt.desc}</p>
+          <div>`;
+        const ev = EVENTS.find(e => e.id === evt.defId);
+        const ctx = buildEventContext(evt);
+        evt.choices.forEach(ch => {
+          const ok = !ch.condition || ch.condition(ctx);
+          html += `<button class="action" onclick="window.resolvePlayerEvent(${evt.id},${ch.idx})" ${ok?'':'disabled'}>${ch.label}</button>`;
+        });
+        html += `</div></div>`;
+      });
+    }
+    html += `</div>`;
+
+    html += `<div class="card"><h3>事件历史</h3>`;
+    if (state.eventHistory.length === 0) {
+      html += `<p>暂无事件记录。</p>`;
+    } else {
+      html += `<table><tr><th>时间</th><th>事件</th><th>结果</th></tr>`;
+      html += state.eventHistory.slice(0, 20).map(h =>
+        `<tr><td>${h.year}年${h.month}月</td><td>${h.title}</td><td>${h.result || '—'}</td></tr>`
+      ).join('');
+      html += `</table>`;
+    }
+    html += `</div>`;
+    c.innerHTML = html;
+  }
+
   function renderLogPage(c) {
     c.innerHTML = `<div class="card"><h3>完整日志</h3>${state.logs.map(m=>`<div class="log-entry">${m}</div>`).join('')}</div>`;
   }
@@ -1120,8 +1285,11 @@
     });
     // Historical events
     historicalEvents();
-    // Random yearly event
+    // Season events
+    triggerSeasonEvent();
+    // Random monthly event
     if(state.month===1) randomEvent();
+    else if(Math.random()<0.3) triggerRandomEvent(); // 每月30%概率触发随机事件
     // Relation fluctuations
     Object.values(state.factions).forEach(a=>{
       if(a.eliminated) return;
@@ -1134,6 +1302,7 @@
     });
     checkEliminations();
     checkVictory();
+    autoResolveAllPending(); // 回合结束前自动处理未决的玩家事件
     saveAuto();
     renderAll();
   };
@@ -1317,23 +1486,145 @@
   }
 
   function randomEvent() {
-    const r = Math.random();
-    const cities = state.cities;
-    if(r<0.2){
-      const c = cities[Math.floor(Math.random()*cities.length)];
-      c.food += 50; log(`丰收：${c.name} 粮食大增`);
-    }else if(r<0.35){
-      const c = cities[Math.floor(Math.random()*cities.length)];
-      c.troops = Math.max(0, c.troops-300); c.morale=Math.max(0,c.morale-10); log(`瘟疫：${c.name} 守军大损`);
-    }else if(r<0.5){
-      const c = cities[Math.floor(Math.random()*cities.length)];
-      c.troops = Math.max(0, c.troops-200); log(`山贼袭扰：${c.name} 守军减少`);
-    }else if(r<0.65){
-      const c = cities[Math.floor(Math.random()*cities.length)];
-      c.money += 100; log(`商路繁荣：${c.name} 金钱增加`);
-    }else{
-      log('这一年天下相对太平。');
+    triggerRandomEvent();
+  }
+
+  function triggerSeasonEvent() {
+    const season = getSeason();
+    const seasonEvents = EVENTS.filter(ev => ev.id.startsWith('season_') && ev.id.endsWith(season));
+    if (!seasonEvents.length) return;
+    Object.values(state.factions).filter(f => !f.eliminated).forEach(f => {
+      const cities = factionCities(f.id);
+      if (!cities.length) return;
+      const city = cities[Math.floor(Math.random() * cities.length)];
+      const ev = seasonEvents[0];
+      const ctx = { state, faction: f, city };
+      if (ev.condition && !ev.condition(ctx)) return;
+      if (f.id === state.playerId) {
+        addPendingEvent(ev, ctx);
+      } else {
+        // AI 季节事件直接结算
+        if (ev.effect) ev.effect(ctx);
+      }
+    });
+  }
+
+  function triggerRandomEvent() {
+    const candidates = [];
+    // 每个存活势力都可能触发事件，玩家势力优先
+    const factions = Object.values(state.factions).filter(f => !f.eliminated);
+    factions.forEach(f => {
+      const cities = factionCities(f.id);
+      if (!cities.length) return;
+      const city = cities[Math.floor(Math.random() * cities.length)];
+      const ctx = { state, faction: f, city };
+      EVENTS.forEach(ev => {
+        if (ev.weight <= 0) return;
+        try { if (ev.condition && !ev.condition(ctx)) return; } catch (e) { return; }
+        candidates.push({ ev, ctx, weight: ev.weight });
+      });
+    });
+    if (!candidates.length) { log('这一年天下相对太平。'); return; }
+    // 加权随机选 1-2 个事件
+    const count = Math.random() < 0.7 ? 1 : 2;
+    for (let i = 0; i < count; i++) {
+      const total = candidates.reduce((s, c) => s + c.weight, 0);
+      let r = Math.random() * total;
+      let pick = null;
+      for (const c of candidates) {
+        r -= c.weight;
+        if (r <= 0) { pick = c; break; }
+      }
+      if (!pick) pick = candidates[0];
+      addPendingEvent(pick.ev, pick.ctx);
+      candidates.splice(candidates.indexOf(pick), 1);
+      if (!candidates.length) break;
     }
+  }
+
+  function addPendingEvent(ev, ctx) {
+    const desc = typeof ev.desc === 'function' ? ev.desc(ctx) : ev.desc;
+    const evt = {
+      id: state.eventIdSeq++,
+      defId: ev.id,
+      title: ev.title,
+      desc,
+      type: ev.type,
+      factionId: ctx.faction.id,
+      cityName: ctx.city.name,
+      generalName: ctx.general ? ctx.general.name : null,
+      choices: ev.choices ? ev.choices.map((c, idx) => ({ label: c.label, idx, condition: c.condition })) : [],
+      createdTurn: state.turn,
+      resolved: false
+    };
+    state.pendingEvents.push(evt);
+    // AI 事件立即自动处理；玩家事件加入待处理列表
+    if (ctx.faction.id !== state.playerId) {
+      autoResolveEvent(evt);
+    } else {
+      log(`[事件] ${evt.title}：${evt.desc}`);
+    }
+  }
+
+  function autoResolveEvent(evt) {
+    const ev = EVENTS.find(e => e.id === evt.defId);
+    if (!ev) return;
+    const ctx = buildEventContext(evt);
+    let result = '';
+    if (ev.type === 'choice' && ev.choices) {
+      // AI 选第一个满足条件的选项，否则选最后一个
+      let choice = ev.choices[ev.choices.length - 1];
+      for (const c of ev.choices) {
+        try { if (!c.condition || c.condition(ctx)) { choice = c; break; } } catch (e) {}
+      }
+      if (choice.effect) result = choice.effect(ctx) || '';
+    } else if (ev.effect) {
+      ev.effect(ctx);
+      result = `${evt.title} 已发生。`;
+    }
+    resolveEvent(evt, result);
+  }
+
+  function buildEventContext(evt) {
+    const faction = state.factions[evt.factionId];
+    const city = findCity(evt.cityName);
+    const general = evt.generalName ? findGeneral(evt.generalName) : null;
+    return { state, faction, city, general };
+  }
+
+  function resolveEvent(evt, result) {
+    evt.resolved = true;
+    state.pendingEvents = state.pendingEvents.filter(e => e.id !== evt.id);
+    state.eventHistory.unshift({
+      turn: state.turn,
+      year: state.year,
+      month: state.month,
+      title: evt.title,
+      desc: evt.desc,
+      result
+    });
+    if (state.eventHistory.length > 50) state.eventHistory.pop();
+    if (result) log(`[事件] ${evt.title}：${result}`);
+  }
+
+  window.resolvePlayerEvent = (eventId, choiceIdx) => {
+    const evt = state.pendingEvents.find(e => e.id === eventId);
+    if (!evt || evt.factionId !== state.playerId) return;
+    const ev = EVENTS.find(e => e.id === evt.defId);
+    if (!ev) return;
+    const ctx = buildEventContext(evt);
+    const choice = ev.choices[choiceIdx];
+    if (!choice) return;
+    let result = '';
+    if (choice.effect) result = choice.effect(ctx) || '';
+    resolveEvent(evt, result);
+    renderAll();
+  };
+
+  function autoResolveAllPending() {
+    // 自动处理所有未处理的玩家事件（默认选第一个可选项）
+    const playerEvents = state.pendingEvents.filter(e => e.factionId === state.playerId);
+    playerEvents.forEach(evt => autoResolveEvent(evt));
   }
 
   function checkEliminations() {
@@ -1480,6 +1771,9 @@
     // 兼容旧存档：补齐可能缺失的字段，避免读档即崩
     if(!state.tech) state.tech = {farmBonus:0, commBonus:0, recruitBonus:0};
     if(!state.eventsTriggered) state.eventsTriggered = {};
+    if(!Array.isArray(state.pendingEvents)) state.pendingEvents = [];
+    if(!Array.isArray(state.eventHistory)) state.eventHistory = [];
+    if(!state.eventIdSeq) state.eventIdSeq = (state.pendingEvents.length + state.eventHistory.length) + 1;
     if(state.yellowTurban===undefined) state.yellowTurban = false;
     if(!Array.isArray(state.logs)) state.logs = [];
     if(!state.gameOver) state.gameOver = false;
