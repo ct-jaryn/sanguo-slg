@@ -165,19 +165,35 @@
       z-index: 0;
       pointer-events: none;
     }
-    .save-code-box {
-      width: 100%;
-      min-height: 120px;
-      font-family: monospace;
+    .tip-bar {
+      background: #fff8e7;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 12px;
       font-size: 0.85rem;
-      padding: 8px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: var(--bg);
-      resize: vertical;
-      word-break: break-all;
+      color: var(--text);
     }
-    .modal p.hint { font-size: 0.85rem; color: var(--muted); margin: 4px 0; }
+    .tip-bar b { color: var(--accent-red); }
+    .goal-bar {
+      background: var(--accent-green);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+    }
+    .tutorial-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 200;
+    }
+    .tutorial-box {
+      background: var(--panel); border: 2px solid var(--border); border-radius: 8px;
+      padding: 24px; max-width: 560px; width: 90%;
+    }
+    .tutorial-box h2 { color: var(--accent-red); margin-top: 0; }
+    .tutorial-box ul { margin: 12px 0; padding-left: 20px; }
+    .tutorial-box li { margin: 6px 0; }
   </style>
 </head>
 <body>
@@ -197,6 +213,22 @@
   <div id="log-panel"><h3>事件日志</h3><div id="logs"></div></div>
 </div>
 <div class="modal-overlay" id="modal"><div class="modal" id="modal-content"></div></div>
+<div class="tutorial-overlay" id="tutorial">
+  <div class="tutorial-box">
+    <h2>欢迎来到《三国风云·轻量 SLG》</h2>
+    <p>你扮演刘备，目标是统一天下。核心循环：</p>
+    <ul>
+      <li><b>内政</b>：开垦农田、发展商业、研发科技、颁布政策</li>
+      <li><b>军事</b>：组建军团、选择战术、攻占相邻城池</li>
+      <li><b>人才</b>：寻访武将、装备养成、提升等级</li>
+      <li><b>外交</b>：结盟、贸易、离间、宣战</li>
+      <li><b>事件</b>：及时处理随机事件，获得机遇或化解危机</li>
+      <li><b>结束回合</b>：资源结算后 AI 行动，历史事件可能触发</li>
+    </ul>
+    <p>小提示：武将战斗可获得经验升级，装备可进一步提升属性。围城战术适合消耗坚城，火攻/水战/埋伏需要对应条件。</p>
+    <div style="margin-top:16px"><button class="action" onclick="window.closeTutorial()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">开始征程</button></div>
+  </div>
+</div>
 <script>
 (() => {
   const SAVE_VERSION = '1.0';
@@ -357,6 +389,47 @@
     }
   ];
 
+  // 装备表：武器加武力/智力，防具加统率/政治，坐骑加机动
+  const EQUIPMENT_TYPES = {
+    weapon: { name: '武器', slot: 'weapon' },
+    armor: { name: '防具', slot: 'armor' },
+    horse: { name: '坐骑', slot: 'horse' }
+  };
+  const EQUIPMENT_POOL = [
+    { name: '青龙偃月刀', type: 'weapon', force: 8, command: 2, cost: 800, rarity: 3 },
+    { name: '丈八蛇矛', type: 'weapon', force: 7, command: 1, cost: 700, rarity: 3 },
+    { name: '青釭剑', type: 'weapon', force: 6, intelligence: 2, cost: 600, rarity: 2 },
+    { name: '方天画戟', type: 'weapon', force: 10, command: 2, cost: 1200, rarity: 4 },
+    { name: '雌雄双股剑', type: 'weapon', force: 5, politics: 2, cost: 600, rarity: 2 },
+    { name: '诸葛连弩', type: 'weapon', force: 4, intelligence: 4, cost: 700, rarity: 3 },
+    { name: '铁甲', type: 'armor', command: 4, force: 2, cost: 500, rarity: 2 },
+    { name: '藤甲', type: 'armor', command: 6, force: -1, cost: 600, rarity: 3 },
+    { name: '锦袍', type: 'armor', politics: 3, command: 2, cost: 500, rarity: 2 },
+    { name: '赤兔马', type: 'horse', force: 3, command: 5, cost: 1000, rarity: 4 },
+    { name: '的卢马', type: 'horse', command: 3, politics: 2, cost: 700, rarity: 3 },
+    { name: '绝影马', type: 'horse', command: 4, intelligence: 1, cost: 700, rarity: 3 }
+  ];
+
+  // 政策法令
+  const POLICIES = {
+    tuntian: { id: 'tuntian', name: '屯田制', desc: '每城粮食产出+20%，金钱产出-5%' },
+    shangwu: { id: 'shangwu', name: '尚武令', desc: '招兵额外+30，士兵消耗粮食+10%' },
+    renzheng: { id: 'renzheng', name: '仁政', desc: '民心自然衰减减半，金钱产出+10%' },
+    zhongshang: { id: 'zhongshang', name: '重商令', desc: '每城金钱产出+20%，粮食产出-5%' }
+  };
+
+  // 战术
+  const TACTICS = {
+    normal: { name: '正面强攻', desc: '标准攻城', atk: 1.0, def: 1.0, loss: 1.0, siege: 1 },
+    fire: { name: '火攻', desc: '高智力主将可用，守军额外损失，城防下降', req: (g) => g && g.intelligence >= 75, atk: 0.95, def: 1.0, loss: 1.1, siege: 1, fireDamage: 0.15 },
+    water: { name: '水战', desc: '南方/临江城池伤害+25%', req: (g, city) => true, atk: 1.0, def: 1.0, loss: 1.0, siege: 1, waterBonus: true },
+    ambush: { name: '埋伏', desc: '高智力主将可用，首回合攻击+30%', req: (g) => g && g.intelligence >= 70, atk: 1.3, def: 1.0, loss: 0.9, siege: 1 },
+    siege: { name: '围城', desc: '分多回合消耗守军，自身损失-30%', req: (g) => g && g.command >= 70, atk: 0.6, def: 1.0, loss: 0.7, siege: 3 }
+  };
+
+  // 城池临水判定（用于水战）
+  const RIVER_CITIES = ['襄阳','江夏','柴桑','建业','扬州','庐江','长沙','武陵','荆州','永安','江州','广陵','寿春','豫章','桂阳','零陵','会稽','建安'];
+
   function makeGenerals() {
     const data = [
       ['刘备','liu',75,78,80,95,'tianming'],
@@ -405,7 +478,7 @@
       ['周仓','huangjin',78,38,66,35,''],
       ['裴元绍','huangjin',70,35,62,33,'']
     ];
-    return data.map(([n,f,fo,i,c,p,s],idx)=>({id:idx,name:n,faction:f,force:fo,intelligence:i,command:c,politics:p,loyalty:f==='free'?60:85,skill:s||null,injured:0,injuredTurns:0}));
+    return data.map(([n,f,fo,i,c,p,s],idx)=>({id:idx,name:n,faction:f,force:fo,intelligence:i,command:c,politics:p,loyalty:f==='free'?60:85,skill:s||null,injured:0,injuredTurns:0,exp:0,level:1,equipment:{weapon:null,armor:null,horse:null}}));
   }
 
   function makeCities() {
@@ -496,17 +569,26 @@
       logs: [],
       gameOver: false,
       winner: null,
-      tech: {farmBonus:0,commBonus:0,recruitBonus:0},
+      tech: {
+        farm: { level: 0, max: 5, farmBonus: 0 },
+        comm: { level: 0, max: 5, commBonus: 0 },
+        military: { level: 0, max: 5, recruitBonus: 0, atkBonus: 0 },
+        fort: { level: 0, max: 5, defBonus: 0 }
+      },
+      policy: null,
       eventsTriggered: {},
       pendingEvents: [],
       eventHistory: [],
       eventIdSeq: 1,
       yellowTurban: false,
       armies: [],
-      nextArmyId: 1
+      nextArmyId: 1,
+      tutorial: true,
+      shownTips: {}
     };
     log('游戏开始！公元190年，乱世群雄并起。');
     renderAll();
+    if(state.tutorial) setTimeout(()=>{ document.getElementById('tutorial').style.display='flex'; }, 100);
   }
 
   function getSeason() {
@@ -529,6 +611,37 @@
   function armyTroopTotal(a) { return a.infantry + a.cavalry + a.archer; }
   function availableGenerals(fid, armyId=null) {
     return state.generals.filter(g=>g.faction===fid && !g.injured && !state.armies.some(ar=>ar.id!==armyId && ar.generals.includes(g.name)));
+  }
+
+  function effectiveStats(g) {
+    if(!g) return { force: 50, intelligence: 50, command: 50, politics: 50 };
+    const levelBonus = Math.floor(g.level / 5) * 2;
+    let force = g.force + levelBonus, intelligence = g.intelligence + levelBonus;
+    let command = g.command + levelBonus, politics = g.politics + levelBonus;
+    Object.values(g.equipment).forEach(item => {
+      if(!item) return;
+      if(item.force) force += item.force;
+      if(item.intelligence) intelligence += item.intelligence;
+      if(item.command) command += item.command;
+      if(item.politics) politics += item.politics;
+    });
+    return { force, intelligence, command, politics };
+  }
+
+  function generalExpToLevelUp(level) {
+    return 100 + (level - 1) * 50;
+  }
+
+  function addGeneralExp(g, amount) {
+    if(!g) return;
+    g.exp += amount;
+    let leveled = false;
+    while(g.exp >= generalExpToLevelUp(g.level)) {
+      g.exp -= generalExpToLevelUp(g.level);
+      g.level++;
+      leveled = true;
+    }
+    if(leveled) log(`${g.name} 升级至 Lv.${g.level}！`);
   }
 
   function log(msg) {
@@ -580,6 +693,40 @@
 
   window.switchTab = (id)=>{ selectedTab=id; renderContent(); renderSidebar(); };
 
+  window.closeTutorial = () => {
+    state.tutorial = false;
+    document.getElementById('tutorial').style.display = 'none';
+    saveAuto();
+  };
+
+  window.showTutorial = () => {
+    document.getElementById('tutorial').style.display = 'flex';
+  };
+
+  function currentGoal() {
+    const p = player();
+    const cities = factionCities(state.playerId).length;
+    const total = state.cities.length;
+    const myArmies = factionArmies(state.playerId).length;
+    if (cities <= 2 && myArmies === 0) return '目标：组建第一支军团，然后出征攻取相邻城池。';
+    if (cities < 5) return '目标：攻占更多城池，扩大势力范围。';
+    if (cities < Math.ceil(total * 0.5)) return '目标：继续扩张，削弱强敌。';
+    return `目标：一统天下！还需占领 ${Math.ceil(total*0.85) - cities} 座城池。`;
+  }
+
+  function tabTip(tab) {
+    const tips = {
+      internal: '提示：优先升级农业/商业科技，选择合适的政策可大幅提升国力。',
+      military: '提示：围城适合消耗坚城，火攻需智力75+主将，水战在临江/南方城池生效。',
+      talent: '提示：武将战斗获得经验升级，装备商店和战斗胜利可获得装备。',
+      diplomacy: '提示：与强敌结盟争取发展时间，对弱敌可宣战扩张。',
+      map: '提示：点击地图上的城池可快速切换到军事面板。',
+      events: '提示：及时处理事件，选择最适合当前局势的选项。',
+      logs: '提示：这里显示完整的事件历史。'
+    };
+    return tips[tab] || '';
+  }
+
   function renderContent() {
     const c = document.getElementById('content');
     if(state.gameOver) {
@@ -587,34 +734,60 @@
       c.innerHTML = `<div class="card"><h2>${msg}</h2><button class="action" onclick="window.initGame()">重新开始</button></div>`;
       return;
     }
-    switch(selectedTab){
-      case 'internal': renderInternal(c); break;
-      case 'military': renderMilitary(c); break;
-      case 'talent': renderTalent(c); break;
-      case 'diplomacy': renderDiplomacy(c); break;
-      case 'map': renderMap(c); break;
-      case 'events': renderEvents(c); break;
-      case 'logs': renderLogPage(c); break;
+    const tip = tabTip(selectedTab);
+    let topHtml = `<div class="goal-bar">${currentGoal()}</div>`;
+    if (tip && !state.shownTips[selectedTab]) {
+      topHtml += `<div class="tip-bar"><b>新手提示：</b>${tip} <a href="#" onclick="window.dismissTip('${selectedTab}');return false;" style="color:var(--accent-red)">[知道了]</a></div>`;
     }
+    const contentDiv = document.createElement('div');
+    switch(selectedTab){
+      case 'internal': renderInternal(contentDiv); break;
+      case 'military': renderMilitary(contentDiv); break;
+      case 'talent': renderTalent(contentDiv); break;
+      case 'diplomacy': renderDiplomacy(contentDiv); break;
+      case 'map': renderMap(contentDiv); break;
+      case 'events': renderEvents(contentDiv); break;
+      case 'logs': renderLogPage(contentDiv); break;
+    }
+    c.innerHTML = topHtml + contentDiv.innerHTML;
   }
+
+  window.dismissTip = (tab) => {
+    state.shownTips[tab] = true;
+    saveAuto();
+    renderAll();
+  };
 
   function renderInternal(c) {
     const p = player();
     const season = getSeason();
+    const tech = state.tech;
+    const policyName = state.policy ? POLICIES[state.policy].name : '无';
     c.innerHTML = `
       <div class="card"><h3>内政中心 · 当前季节：${season}</h3>
-      <p>拥有城池：${factionCities(state.playerId).length}座 · 武将：${factionGenerals(state.playerId).length}人</p>
+      <p>拥有城池：${factionCities(state.playerId).length}座 · 武将：${factionGenerals(state.playerId).length}人 · 当前政策：${policyName}</p>
       <button class="action" onclick="window.doInternal('farm')" ${p.gold<200?'disabled':''}>开垦农田 (200金)</button>
       <button class="action" onclick="window.doInternal('comm')" ${p.gold<200?'disabled':''}>发展商业 (200金)</button>
       <button class="action" onclick="window.doInternal('recruit')" ${p.gold<150||p.food<200?'disabled':''}>招兵买马 (150金+200粮)</button>
       <button class="action" onclick="window.doInternal('search')" ${p.gold<300?'disabled':''}>寻访人才 (300金)</button>
       <button class="action" onclick="window.doInternal('heal')" ${p.gold<200||!factionGenerals(state.playerId).some(g=>g.injured)?'disabled':''}>医治伤员 (200金)</button>
       <button class="action" onclick="window.doInternal('morale')" ${p.gold<150?'disabled':''}>提升民心 (150金)</button>
-      <button class="action" onclick="window.doInternal('tech')" ${p.gold<500?'disabled':''}>研发科技 (500金)</button>
+      <button class="action" onclick="window.doInternal('fort')" ${p.gold<300?'disabled':''}>加固城防 (300金)</button>
+      </div>
+      <div class="card"><h3>科技树</h3>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+        <div><b>农业</b> Lv.${tech.farm.level}/${tech.farm.max} 粮产+${tech.farm.farmBonus} <button class="action" onclick="window.doInternal('tech_farm')" ${p.gold<500||tech.farm.level>=tech.farm.max?'disabled':''}>升级 (500金)</button></div>
+        <div><b>商业</b> Lv.${tech.comm.level}/${tech.comm.max} 金产+${tech.comm.commBonus} <button class="action" onclick="window.doInternal('tech_comm')" ${p.gold<500||tech.comm.level>=tech.comm.max?'disabled':''}>升级 (500金)</button></div>
+        <div><b>军事</b> Lv.${tech.military.level}/${tech.military.max} 招兵+${tech.military.recruitBonus} 攻击+${tech.military.atkBonus}% <button class="action" onclick="window.doInternal('tech_military')" ${p.gold<500||tech.military.level>=tech.military.max?'disabled':''}>升级 (500金)</button></div>
+        <div><b>城防</b> Lv.${tech.fort.level}/${tech.fort.max} 城防+${tech.fort.defBonus} <button class="action" onclick="window.doInternal('tech_fort')" ${p.gold<500||tech.fort.level>=tech.fort.max?'disabled':''}>升级 (500金)</button></div>
+      </div></div>
+      <div class="card"><h3>政策法令</h3>
+      <p>每项政策持续生效，切换政策需花费 300 金。</p>
+      ${Object.values(POLICIES).map(pol=>`<button class="action" onclick="window.setPolicy('${pol.id}')" ${state.policy===pol.id?'style="background:var(--accent-green);color:#fff"':''}${p.gold<300&&state.policy!==pol.id?' disabled':''}>${pol.name}：${pol.desc}</button>`).join('')}
       </div>
       <div class="card"><h3>城池产出</h3>
-      <table><tr><th>城池</th><th>粮食产出</th><th>金钱产出</th><th>民心</th><th>守军</th></tr>
-      ${factionCities(state.playerId).map(city=>`<tr><td>${city.name}</td><td>${city.food}</td><td>${city.money}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td></tr>`).join('')}
+      <table><tr><th>城池</th><th>粮食产出</th><th>金钱产出</th><th>民心</th><th>守军</th><th>城防</th></tr>
+      ${factionCities(state.playerId).map(city=>`<tr><td>${city.name}</td><td>${city.food}</td><td>${city.money}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td><td>${city.defense.toFixed(1)}</td></tr>`).join('')}
       </table></div>`;
   }
 
@@ -626,7 +799,7 @@
     }else if(type==='comm' && p.gold>=200){
       p.gold-=200; cities.forEach(c=>c.money+=12); log('发展商业，各城金钱产出+12');
     }else if(type==='recruit' && p.gold>=150 && p.food>=200){
-      p.gold-=150; p.food-=200; const add = Math.floor(100+Math.random()*101+state.tech.recruitBonus); p.troops+=add; log(`招兵买马，兵力+${add}`);
+      p.gold-=150; p.food-=200; let add = Math.floor(100+Math.random()*101+state.tech.military.recruitBonus); if(state.policy==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
     }else if(type==='search' && p.gold>=300){
       p.gold-=300;
       if(Math.random()<0.4){
@@ -641,12 +814,30 @@
       p.gold-=200; factionGenerals(state.playerId).forEach(g=>{g.injured=0;g.injuredTurns=0;}); log('医治伤员，所有武将恢复健康');
     }else if(type==='morale' && p.gold>=150){
       p.gold-=150; cities.forEach(c=>c.morale=Math.min(100,c.morale+10)); log('提升民心，各城民心+10');
+    }else if(type==='fort' && p.gold>=300){
+      p.gold-=300; cities.forEach(c=>{c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2));}); log('加固城防，各城城防+0.1');
+    }else if(type==='tech_farm' && p.gold>=500 && state.tech.farm.level < state.tech.farm.max){
+      p.gold-=500; state.tech.farm.level++; state.tech.farm.farmBonus += 10; log(`农业科技升至 Lv.${state.tech.farm.level}，每城粮产+${state.tech.farm.farmBonus}`);
+    }else if(type==='tech_comm' && p.gold>=500 && state.tech.comm.level < state.tech.comm.max){
+      p.gold-=500; state.tech.comm.level++; state.tech.comm.commBonus += 8; log(`商业科技升至 Lv.${state.tech.comm.level}，每城金产+${state.tech.comm.commBonus}`);
+    }else if(type==='tech_military' && p.gold>=500 && state.tech.military.level < state.tech.military.max){
+      p.gold-=500; state.tech.military.level++; state.tech.military.recruitBonus += 30; state.tech.military.atkBonus += 4; log(`军事科技升至 Lv.${state.tech.military.level}，招兵+${state.tech.military.recruitBonus}，全军攻击+${state.tech.military.atkBonus}%`);
+    }else if(type==='tech_fort' && p.gold>=500 && state.tech.fort.level < state.tech.fort.max){
+      p.gold-=500; state.tech.fort.level++; state.tech.fort.defBonus += 0.1; cities.forEach(c=>{c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2));}); log(`城防科技升至 Lv.${state.tech.fort.level}，城防+${state.tech.fort.defBonus.toFixed(1)}`);
     }else if(type==='tech' && p.gold>=500){
-      p.gold-=500; const r=Math.random();
-      if(r<0.33){state.tech.farmBonus+=10;log('研发农业科技，粮食产出额外+10/城');}
-      else if(r<0.66){state.tech.commBonus+=8;log('研发商业科技，金钱产出额外+8/城');}
-      else {state.tech.recruitBonus+=30;log('研发募兵科技，招兵额外+30');}
+      // 兼容旧版研发科技：随机升级一个未满的科技
+      p.gold-=500; const opts = ['farm','comm','military','fort'].filter(k=>state.tech[k].level<state.tech[k].max);
+      if(opts.length){ window.doInternal(`tech_${opts[Math.floor(Math.random()*opts.length)]}`); return; }
+      log('所有科技已满级');
     }
+    renderAll();
+  };
+
+  window.setPolicy = (pid)=>{
+    const p = player();
+    if(state.policy===pid) return;
+    if(p.gold<300){ log('金钱不足，无法切换政策'); return; }
+    p.gold-=300; state.policy=pid; log(`颁布${POLICIES[pid].name}`);
     renderAll();
   };
 
@@ -692,8 +883,10 @@
       html += `<div style="margin:8px 0">
         <label>军团：</label><select id="atk-army">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
         <label> 目标城：</label><select id="atk-to"><option>请先选军团</option></select>
+        <label> 战术：</label><select id="atk-tactic">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
         <button class="action" onclick="window.doArmyAttack()">出征</button>
       </div>`;
+      html += `<div id="tactic-desc" style="font-size:0.85rem;color:var(--muted)"></div>`;
       html += `<div id="atk-preview"></div>`;
     }
     html += `</div>`;
@@ -730,6 +923,19 @@
       };
       armySel.addEventListener('change', updateTargets);
       updateTargets();
+      const tacticSel = document.getElementById('atk-tactic');
+      const tacticDesc = document.getElementById('tactic-desc');
+      if (tacticSel && tacticDesc) {
+        const updateTacticDesc = () => {
+          const army = findArmy(parseInt(armySel.value));
+          const main = army && army.generals.length ? findGeneral(army.generals[0]) : null;
+          const t = TACTICS[tacticSel.value] || TACTICS.normal;
+          const ok = !t.req || t.req(main, null);
+          tacticDesc.innerHTML = `${t.desc} ${ok ? '' : '（当前主将不满足条件）'}`;
+        };
+        tacticSel.addEventListener('change', updateTacticDesc);
+        updateTacticDesc();
+      }
     }
   }
 
@@ -757,6 +963,7 @@
     if(state.gameOver) return;
     const armyId = parseInt(document.getElementById('atk-army').value);
     const toName = document.getElementById('atk-to').value;
+    const tacticKey = document.getElementById('atk-tactic').value;
     const army = findArmy(armyId);
     const target = findCity(toName);
     if(!army || !target) { alert('请选择有效军团和目标'); return; }
@@ -768,122 +975,171 @@
     if(armyTroopTotal(army)<100) { alert('军团兵力不足'); return; }
     const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
     if(mainGeneral && mainGeneral.injured) { alert('主将受伤中'); return; }
+    const tactic = TACTICS[tacticKey];
+    if(tactic.req && !tactic.req(mainGeneral, target)) { alert('当前主将不满足该战术条件'); return; }
     if(target.owner) setRelation(state.playerId,target.owner,-100);
-    armyBattle(state.playerId, target.owner||'neutral', army, target);
+    armyBattle(state.playerId, target.owner||'neutral', army, target, tacticKey);
     renderAll();
   };
 
-  function armyBattle(attackerId, defenderId, army, targetCity) {
+  function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal') {
     const total = armyTroopTotal(army);
     const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
     const atkFaction = state.factions[attackerId];
-    // Aggregate attack from all troop types
+    const tactic = TACTICS[tacticKey] || TACTICS.normal;
+    const stats = effectiveStats(mainGeneral);
+
+    // 围城：多回合消耗，第一次不判定胜负
+    if (tacticKey === 'siege') {
+      if (!targetCity.siegeProgress) targetCity.siegeProgress = { attackerId, armyId: army.id, progress: 0, turns: 0 };
+      targetCity.siegeProgress.turns++;
+      const siegeDamage = Math.floor(total * 0.15);
+      targetCity.troops = Math.max(0, targetCity.troops - siegeDamage);
+      targetCity.siegeProgress.progress += 25;
+      const losses = Math.floor(total * 0.05);
+      applyArmyLosses(army, total, losses);
+      addGeneralExp(mainGeneral, 15);
+      log(`${atkFaction.name} 的 ${army.name} 围困 ${targetCity.name}，守军损失 ${siegeDamage}，围城进度 ${targetCity.siegeProgress.progress}%`);
+      if (targetCity.siegeProgress.progress >= 100 || targetCity.troops === 0) {
+        // 城池投降
+        const oldOwner = targetCity.owner;
+        disbandArmiesAt(targetCity.name, oldOwner);
+        targetCity.owner = attackerId;
+        targetCity.troops = Math.max(0, targetCity.troops);
+        targetCity.morale = Math.max(30, targetCity.morale - 20);
+        army.city = targetCity.name;
+        targetCity.siegeProgress = null;
+        log(`${atkFaction.name} 的 ${army.name}(${mainGeneral?mainGeneral.name:'无将'}) 攻占了 ${targetCity.name}！围城成功`);
+        if(oldOwner && state.factions[oldOwner] && factionCities(oldOwner).length===0) log(`${state.factions[oldOwner].name} 势力灭亡！`);
+      }
+      return;
+    }
+    // 非围城清除 siegeProgress
+    if (targetCity.siegeProgress && targetCity.siegeProgress.attackerId === attackerId) targetCity.siegeProgress = null;
+
     let attack = 0;
     [['infantry',army.infantry],['cavalry',army.cavalry],['archer',army.archer]].forEach(([typeKey,troops])=>{
       if(troops<=0) return;
       const tt = TROOP_TYPES[typeKey];
-      let base = troops * (0.5 + (mainGeneral?mainGeneral.force:50)/200) * (0.5 + (mainGeneral?mainGeneral.command:50)/200) * tt.atk;
+      let base = troops * (0.5 + stats.force/200) * (0.5 + stats.command/200) * tt.atk;
       if(typeKey==='archer') base *= tt.siegeAtk;
       attack += base;
     });
-    // General skills apply to aggregate attack
     let aMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
     let dMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
     if(mainGeneral && mainGeneral.skill && SKILLS[mainGeneral.skill] && typeof SKILLS[mainGeneral.skill].battle==='function') SKILLS[mainGeneral.skill].battle(aMods,dMods);
-    attack *= aMods.forceMul * aMods.atkMul;
+    attack *= aMods.forceMul * aMods.atkMul * tactic.atk;
 
-    // 兵种克制：攻方兵种构成 vs 守方城池兵种构成
+    // 水战加成
+    if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) attack *= 1.25;
+
+    // 军事科技攻击加成
+    attack *= (1 + state.tech.military.atkBonus / 100);
+
+    // 兵种克制
     const atkShare = { infantry: army.infantry/total, cavalry: army.cavalry/total, archer: army.archer/total };
     const defComp = cityDefenseComp(targetCity);
-    attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));   // 攻方克制守方
+    attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
 
     const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
+    const defStats = effectiveStats(defGeneral);
     if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
 
-    let defense = targetCity.troops * 1.2 * targetCity.defense * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
-    defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));   // 守方克制攻方
-    if(defGeneral) defense *= (0.5 + defGeneral.command/200);
+    let defense = targetCity.troops * 1.2 * (targetCity.defense + state.tech.fort.defBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+    defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
+    if(defGeneral) defense *= (0.5 + defStats.command/200);
     if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
     if(state.eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && state.factions.sun.allies.includes('liu')) attack*=0.7;
 
     const victory = attack > defense;
     if(victory){
-      const losses = Math.floor(total * 0.25);
+      const losses = Math.floor(total * 0.25 * tactic.loss);
       const survivors = total - losses;
-      const garrison = Math.floor(survivors / 2);          // 留守部队
-      const keepRatio = Math.max(0, (survivors - garrison) / total);
-      army.infantry = Math.floor(army.infantry * keepRatio);
-      army.cavalry = Math.floor(army.cavalry * keepRatio);
-      army.archer = Math.floor(army.archer * keepRatio);
+      const garrison = Math.floor(survivors / 2);
+      applyArmyLosses(army, total, losses);
       targetCity.troops = garrison;
       const oldOwner = targetCity.owner;
-      // 遣散守方驻扎在失城的军团（避免幽灵军团从敌城出兵）
       disbandArmiesAt(targetCity.name, oldOwner);
       targetCity.owner = attackerId;
       targetCity.morale = Math.max(30, targetCity.morale - 20);
       army.city = targetCity.name;
-      // 奸雄：战胜双倍金钱（攻方主将特技）
       const reward = 200 * (mainGeneral && mainGeneral.skill==='jianxiong' ? SKILLS.jianxiong.rewardGold : 1);
       atkFaction.gold += reward;
+      // 火攻：额外守军损失
+      if (tacticKey === 'fire') {
+        targetCity.troops = Math.floor(targetCity.troops * (1 - tactic.fireDamage));
+      }
       if(mainGeneral && mainGeneral.skill==='huoji') targetCity.troops = Math.floor(targetCity.troops*(1 - SKILLS.huoji.fire));
+      addGeneralExp(mainGeneral, 30);
+      if(defGeneral) addGeneralExp(defGeneral, 10);
+      const dropped = awardRandomEquipment();
+      if (dropped) log(`缴获装备：${dropped.name}`);
       log(`${atkFaction.name} 的 ${army.name}(${mainGeneral?mainGeneral.name:'无将'}) 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
       if(oldOwner && state.factions[oldOwner] && factionCities(oldOwner).length===0) log(`${state.factions[oldOwner].name} 势力灭亡！`);
     }else{
-      let losses = Math.floor(total * 0.4);
-      const ratio = Math.max(0, (total - losses) / total);
-      army.infantry = Math.floor(army.infantry * ratio);
-      army.cavalry = Math.floor(army.cavalry * ratio);
-      army.archer = Math.floor(army.archer * ratio);
+      let losses = Math.floor(total * 0.4 * tactic.loss);
+      applyArmyLosses(army, total, losses);
       targetCity.troops = Math.floor(targetCity.troops * 0.85);
       if(mainGeneral){
         let woundChance = 0.3 + aMods.woundExtra;
         if(mainGeneral.skill && SKILLS[mainGeneral.skill].wound) woundChance *= SKILLS[mainGeneral.skill].wound;
         if(Math.random()<woundChance){ mainGeneral.injured=1; mainGeneral.injuredTurns=1+Math.floor(Math.random()*2); log(`${mainGeneral.name} 受伤，需休养 ${mainGeneral.injuredTurns} 月`); }
       }
+      addGeneralExp(mainGeneral, 15);
+      if(defGeneral) addGeneralExp(defGeneral, 20);
       log(`${atkFaction.name} 的 ${army.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
     }
+  }
+
+  function applyArmyLosses(army, total, losses) {
+    const ratio = Math.max(0, (total - losses) / total);
+    army.infantry = Math.floor(army.infantry * ratio);
+    army.cavalry = Math.floor(army.cavalry * ratio);
+    army.archer = Math.floor(army.archer * ratio);
   }
 
   function battle(attackerId, defenderId, general, atkTroops, targetCity, troopTypeKey) {
     const atkFaction = state.factions[attackerId];
     const troopType = TROOP_TYPES[troopTypeKey];
     const defTroops = targetCity.troops;
+    const stats = effectiveStats(general);
     let aMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
     let dMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
     if(general && general.skill && SKILLS[general.skill] && typeof SKILLS[general.skill].battle === 'function') SKILLS[general.skill].battle(aMods,dMods);
     const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
+    const defStats = effectiveStats(defGeneral);
     if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle === 'function') SKILLS[defGeneral.skill].battle(dMods,aMods);
-    let attack = atkTroops * (0.5 + general.force/200 * aMods.forceMul) * (0.5 + general.command/200) * troopType.atk * aMods.atkMul;
-    // Siege bonus for archer
+    let attack = atkTroops * (0.5 + stats.force/200 * aMods.forceMul) * (0.5 + stats.command/200) * troopType.atk * aMods.atkMul;
+    attack *= (1 + state.tech.military.atkBonus / 100);
     if(troopTypeKey==='archer') attack *= troopType.siegeAtk;
-    // 兵种克制：攻方单兵种 vs 守方城池兵种构成
     const atkShare = { infantry: troopTypeKey==='infantry'?1:0, cavalry: troopTypeKey==='cavalry'?1:0, archer: troopTypeKey==='archer'?1:0 };
     const defComp = cityDefenseComp(targetCity);
-    attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));   // 攻方克制守方
-    let defense = targetCity.troops * 1.2 * targetCity.defense * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
-    defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));   // 守方克制攻方
-    if(defGeneral) defense *= (0.5 + defGeneral.command/200);
+    attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
+    let defense = targetCity.troops * 1.2 * (targetCity.defense + state.tech.fort.defBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+    defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
+    if(defGeneral) defense *= (0.5 + defStats.command/200);
     if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
     if(state.eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && state.factions.sun.allies.includes('liu')) attack*=0.7;
 
-    // 部署出征兵力（从预备役扣除，避免攻城造兵）
     atkFaction.troops -= atkTroops;
     let victory = attack > defense;
     if(victory){
       const losses = Math.floor(atkTroops * 0.25);
       const survivors = atkTroops - losses;
-      const garrison = Math.floor(survivors / 2);        // 留守部队
-      atkFaction.troops += survivors - garrison;          // 其余存活兵力归还预备役
+      const garrison = Math.floor(survivors / 2);
+      atkFaction.troops += survivors - garrison;
       targetCity.troops = garrison;
       const oldOwner = targetCity.owner;
       disbandArmiesAt(targetCity.name, oldOwner);
       targetCity.owner = attackerId;
       targetCity.morale = Math.max(30, targetCity.morale - 20);
-      // 奸雄：战胜双倍金钱（攻方主将特技）
       const reward = 200 * (general && general.skill==='jianxiong' ? SKILLS.jianxiong.rewardGold : 1);
       atkFaction.gold += reward;
-      // 火计：攻城守军额外损失
       if(general && general.skill==='huoji') targetCity.troops = Math.floor(targetCity.troops*(1 - SKILLS.huoji.fire));
+      addGeneralExp(general, 25);
+      if(defGeneral) addGeneralExp(defGeneral, 8);
+      const dropped = awardRandomEquipment();
+      if (dropped) log(`缴获装备：${dropped.name}`);
       log(`${atkFaction.name} 的 ${general.name} 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
       if(oldOwner && state.factions[oldOwner]){
         const old = state.factions[oldOwner];
@@ -892,12 +1148,13 @@
     }else{
       const losses = Math.floor(atkTroops * 0.4);
       const survivors = atkTroops - losses;
-      atkFaction.troops += survivors;                     // 败兵归还预备役
+      atkFaction.troops += survivors;
       targetCity.troops = Math.floor(defTroops * 0.85);
       let woundChance = 0.3 + aMods.woundExtra;
-      // 龙胆：受伤概率减半
       if(general && general.skill && SKILLS[general.skill].wound) woundChance *= SKILLS[general.skill].wound;
       if(Math.random()<woundChance){ general.injured=1; general.injuredTurns=1+Math.floor(Math.random()*2); log(`${general.name} 受伤，需休养 ${general.injuredTurns} 月`); }
+      addGeneralExp(general, 12);
+      if(defGeneral) addGeneralExp(defGeneral, 15);
       log(`${atkFaction.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
     }
   }
@@ -905,19 +1162,116 @@
   function renderTalent(c) {
     const p = player();
     const myGens = factionGenerals(state.playerId);
-    const enemyGens = state.generals.filter(g=>g.faction!=='free'&&g.faction!==state.playerId&&g.loyalty<30&&state.factions[g.faction]&&!state.factions[g.faction].eliminated);
+    const enemyGens = state.generals.filter(g => g.faction !== 'free' && g.faction !== state.playerId && g.loyalty < 30 && state.factions[g.faction] && !state.factions[g.faction].eliminated);
+    const equippable = state.generals.filter(g => g.faction === state.playerId);
     c.innerHTML = `
       <div class="card"><h3>人才招募</h3>
-      <button class="action" onclick="window.doInternal('search')" ${p.gold<300?'disabled':''}>寻访人才 (300金)</button>
-      <p>在野武将可通过寻访加入。敌方忠诚度低于30的武将可招降。</p>
+      <button class="action" onclick="window.doInternal('search')" ${p.gold < 300 ? 'disabled' : ''}>寻访人才 (300金)</button>
+      <button class="action" onclick="window.openEquipShop()" ${p.gold < 500 ? 'disabled' : ''}>装备商店 (500金)</button>
+      <p>在野武将可通过寻访加入。敌方忠诚度低于30的武将可招降。武将战斗可获得经验升级。</p>
       </div>
       <div class="card"><h3>可招降武将</h3>
-      ${enemyGens.length?enemyGens.map(g=>`<div style="margin:4px 0">${g.name} (${state.factions[g.faction].name}) 忠诚${g.loyalty} <button class="action" onclick="window.recruitGeneral('${g.name}')" ${p.gold<500?'disabled':''}>招降 (500金)</button></div>`).join(''):'<p>当前没有可招降武将</p>'}
+      ${enemyGens.length ? enemyGens.map(g => `<div style="margin:4px 0">${g.name} (${state.factions[g.faction].name}) 忠诚${g.loyalty} <button class="action" onclick="window.recruitGeneral('${g.name}')" ${p.gold < 500 ? 'disabled' : ''}>招降 (500金)</button></div>`).join('') : '<p>当前没有可招降武将</p>'}
       </div>
       <div class="card"><h3>我方武将</h3>
-      <table><tr><th>姓名</th><th>武力</th><th>智力</th><th>统率</th><th>政治</th><th>忠诚</th><th>特技</th><th>状态</th></tr>
-      ${myGens.map(g=>`<tr><td>${g.name}</td><td>${g.force}</td><td>${g.intelligence}</td><td>${g.command}</td><td>${g.politics}</td><td>${g.loyalty}</td><td>${g.skill?SKILL_NAMES[g.skill]||'':'-'}</td><td>${g.injured?'<span class="injured">受伤'+g.injuredTurns+'月</span>':'健康'}</td></tr>`).join('')}
-      </table></div>`;
+      <table><tr><th>姓名</th><th>等级</th><th>经验</th><th>武力</th><th>智力</th><th>统率</th><th>政治</th><th>忠诚</th><th>特技</th><th>装备</th><th>状态</th></tr>
+      ${myGens.map(g => {
+        const st = effectiveStats(g);
+        const equipStr = [g.equipment.weapon, g.equipment.armor, g.equipment.horse].filter(Boolean).map(e => e.name).join(', ') || '无';
+        return `<tr><td>${g.name}</td><td>${g.level}</td><td>${g.exp}/${generalExpToLevelUp(g.level)}</td><td>${st.force}</td><td>${st.intelligence}</td><td>${st.command}</td><td>${st.politics}</td><td>${g.loyalty}</td><td>${g.skill ? SKILL_NAMES[g.skill] || '' : '-'}</td><td>${equipStr}</td><td>${g.injured ? '<span class="injured">受伤' + g.injuredTurns + '月</span>' : '健康'}</td></tr>`;
+      }).join('')}
+      </table></div>
+      <div class="card"><h3>装备管理</h3>
+      <p>为武将穿戴或卸下装备。装备效果计入有效属性。</p>
+      <div style="margin:8px 0">
+        <label>武将：</label><select id="equip-gen">${equippable.map(g => `<option value="${g.name}">${g.name}</option>`).join('')}</select>
+        <label> 装备：</label><select id="equip-item"><option value="">卸下全部</option>${EQUIPMENT_POOL.filter(it => it.owned).map(it => `<option value="${it.name}">${it.name} (${EQUIPMENT_TYPES[it.type].name})</option>`).join('')}</select>
+        <button class="action" onclick="window.equipItem()">穿戴/卸下</button>
+      </div>
+      <p style="font-size:0.8rem;color:var(--muted)">装备可在战斗胜利、事件奖励或装备商店中获得。</p>
+      </div>`;
+  }
+
+  window.openEquipShop = () => {
+    const p = player();
+    if (p.gold < 500) return;
+    const items = EQUIPMENT_POOL.filter(it => !it.owned).sort(() => Math.random() - 0.5).slice(0, 4);
+    const modal = document.getElementById('modal');
+    const content = document.getElementById('modal-content');
+    modal.style.display = 'flex';
+    content.innerHTML = `
+      <h2>装备商店</h2>
+      <p>当前金钱：${Math.floor(p.gold)}</p>
+      ${items.length ? items.map(it => {
+        const attr = ['force', 'intelligence', 'command', 'politics'].filter(k => it[k]).map(k => `${k === 'force' ? '武' : k === 'intelligence' ? '智' : k === 'command' ? '统' : '政'}+${it[k]}`).join(' ');
+        return `<div style="margin:8px 0;padding:8px;border:1px solid var(--border);border-radius:4px">
+          <b>${it.name}</b> [${EQUIPMENT_TYPES[it.type].name}] ${attr} · ${it.cost}金
+          <button class="action" onclick="window.buyEquip('${it.name}')" ${p.gold < it.cost ? 'disabled' : ''}>购买</button>
+        </div>`;
+      }).join('') : '<p>当前没有可售装备。</p>'}
+      <div style="margin-top:12px"><button class="action" onclick="window.closeModal()">关闭</button></div>`;
+  };
+
+  window.buyEquip = (name) => {
+    const p = player();
+    const item = EQUIPMENT_POOL.find(it => it.name === name);
+    if (!item || item.owned || p.gold < item.cost) return;
+    p.gold -= item.cost;
+    item.owned = true;
+    log(`购买装备 ${item.name}`);
+    window.openEquipShop();
+    renderAll();
+  };
+
+  window.equipItem = () => {
+    const gName = document.getElementById('equip-gen').value;
+    const itemName = document.getElementById('equip-item').value;
+    const g = findGeneral(gName);
+    if (!g) return;
+    if (!itemName) {
+      // 卸下全部
+      Object.keys(g.equipment).forEach(slot => {
+        const item = g.equipment[slot];
+        if (item) { item.owned = true; g.equipment[slot] = null; }
+      });
+      log(`${g.name} 卸下全部装备`);
+    } else {
+      const item = EQUIPMENT_POOL.find(it => it.name === itemName);
+      if (!item || !item.owned) return;
+      // 如果其他武将装备了该物品，先卸下
+      state.generals.forEach(gg => {
+        if (gg.equipment[item.type] && gg.equipment[item.type].name === item.name) {
+          gg.equipment[item.type] = null;
+        }
+      });
+      // 卸下当前同槽位
+      const old = g.equipment[item.type];
+      if (old) old.owned = true;
+      g.equipment[item.type] = item;
+      log(`${g.name} 装备了 ${item.name}`);
+    }
+    renderAll();
+  };
+
+  function awardRandomEquipment() {
+    const pool = EQUIPMENT_POOL.filter(it => !it.owned);
+    if (!pool.length) return null;
+    const weights = pool.map(it => it.rarity);
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < pool.length; i++) {
+      r -= weights[i];
+      if (r <= 0) {
+        pool[i].owned = true;
+        return pool[i];
+      }
+    }
+    pool[0].owned = true;
+    return pool[0];
+  }
+
+  function equipNameList(g) {
+    return [g.equipment.weapon, g.equipment.armor, g.equipment.horse].filter(Boolean).map(e => e.name).join(', ') || '无';
   }
 
   function removeGeneralFromArmies(name) {
@@ -1241,40 +1595,47 @@
       }
     });
     // Resource settlement
-    Object.values(state.factions).forEach(f=>{
-      if(f.eliminated) return;
+    Object.values(state.factions).forEach(f => {
+      if (f.eliminated) return;
       const cities = factionCities(f.id);
-      // 天命：拥有该特技的武将使民心衰减减半
-      const hasTianming = state.generals.some(g=>g.faction===f.id && !g.injured && g.skill==='tianming');
-      const moraleDecay = hasTianming ? SKILLS.tianming.moraleDecay : 1;
-      let foodGain=0, goldGain=0;
-      cities.forEach(c=>{
-        let fmul = c.morale/100, gmul = c.morale/100;
+      const hasTianming = state.generals.some(g => g.faction === f.id && !g.injured && g.skill === 'tianming');
+      const policy = f.policy ? POLICIES[f.policy] : null;
+      let foodGain = 0, goldGain = 0;
+      let moraleDecay = hasTianming ? SKILLS.tianming.moraleDecay : 1;
+      if (policy && policy.id === 'renzheng') moraleDecay *= 0.5;
+      cities.forEach(c => {
+        let fmul = c.morale / 100, gmul = c.morale / 100;
         const season = getSeason();
-        if(season==='春') fmul*=1.2;
-        if(season==='秋') fmul*=1.3;
-        foodGain += c.food * fmul + state.tech.farmBonus;
-        goldGain += c.money * gmul + state.tech.commBonus;
-        if(season==='夏' && Math.random()<0.3) c.troops += Math.floor(20 * (1 + 0.2));
+        if (season === '春') fmul *= 1.2;
+        if (season === '秋') fmul *= 1.3;
+        let cityFood = c.food * fmul + state.tech.farm.farmBonus;
+        let cityMoney = c.money * gmul + state.tech.comm.commBonus;
+        if (policy) {
+          if (policy.id === 'tuntian') cityFood *= 1.2;
+          if (policy.id === 'tuntian') cityMoney *= 0.95;
+          if (policy.id === 'zhongshang') cityMoney *= 1.2;
+          if (policy.id === 'zhongshang') cityFood *= 0.95;
+        }
+        foodGain += cityFood;
+        goldGain += cityMoney;
+        if (season === '夏' && Math.random() < 0.3) c.troops += Math.floor(20 * (1 + 0.2));
         c.morale = Math.max(20, Math.min(100, c.morale - moraleDecay));
       });
       f.food += foodGain; f.gold += goldGain;
-      // 粮食消耗：预备役 + 城池守军均吃粮
-      const garrisonTotal = cities.reduce((s,c)=>s+c.troops,0);
-      const consume = Math.floor((f.troops + garrisonTotal)/100)*20;
+      const garrisonTotal = cities.reduce((s, c) => s + c.troops, 0);
+      let consume = Math.floor((f.troops + garrisonTotal) / 100) * 20;
+      if (policy && policy.id === 'shangwu') consume = Math.floor(consume * 1.1);
       f.food -= consume;
-      if(f.food<0){
-        const decay = Math.floor(Math.abs(f.food)/5);
-        f.troops = Math.max(0, f.troops-decay);
-        if(f.id===state.playerId) log(`粮食不足，兵力衰减 ${decay}`);
-        f.food=0;
+      if (f.food < 0) {
+        const decay = Math.floor(Math.abs(f.food) / 5);
+        f.troops = Math.max(0, f.troops - decay);
+        if (f.id === state.playerId) log(`粮食不足，兵力衰减 ${decay}`);
+        f.food = 0;
       }
-      // 预备役上限：按城池数量独立计算（不再反向依赖守军）
-      f.troops = Math.min(f.troops, cities.length*3000);
-      // Food consumption for field armies（每百人按兵种消耗：步20/骑30/弓22）
+      f.troops = Math.min(f.troops, cities.length * 3000);
       const myArmies = factionArmies(f.id);
-      myArmies.forEach(a=>{
-        const foodNeed = (Math.floor(a.infantry/100)*20 + Math.floor(a.cavalry/100)*30 + Math.floor(a.archer/100)*22);
+      myArmies.forEach(a => {
+        const foodNeed = (Math.floor(a.infantry / 100) * 20 + Math.floor(a.cavalry / 100) * 30 + Math.floor(a.archer / 100) * 22);
         f.food -= foodNeed;
       });
     });
@@ -1769,7 +2130,19 @@
       });
     });
     // 兼容旧存档：补齐可能缺失的字段，避免读档即崩
-    if(!state.tech) state.tech = {farmBonus:0, commBonus:0, recruitBonus:0};
+    if(!state.tech || state.tech.farmBonus!==undefined){
+      // 旧格式 tech: {farmBonus, commBonus, recruitBonus}
+      const fb = state.tech ? state.tech.farmBonus || 0 : 0;
+      const cb = state.tech ? state.tech.commBonus || 0 : 0;
+      const rb = state.tech ? state.tech.recruitBonus || 0 : 0;
+      state.tech = {
+        farm: { level: Math.min(5, Math.floor(fb/10)), max: 5, farmBonus: fb },
+        comm: { level: Math.min(5, Math.floor(cb/8)), max: 5, commBonus: cb },
+        military: { level: Math.min(5, Math.floor(rb/30)), max: 5, recruitBonus: rb, atkBonus: 0 },
+        fort: { level: 0, max: 5, defBonus: 0 }
+      };
+    }
+    if(!state.policy) state.policy = null;
     if(!state.eventsTriggered) state.eventsTriggered = {};
     if(!Array.isArray(state.pendingEvents)) state.pendingEvents = [];
     if(!Array.isArray(state.eventHistory)) state.eventHistory = [];
@@ -1777,6 +2150,14 @@
     if(state.yellowTurban===undefined) state.yellowTurban = false;
     if(!Array.isArray(state.logs)) state.logs = [];
     if(!state.gameOver) state.gameOver = false;
+    if(state.tutorial===undefined) state.tutorial = false;
+    if(!state.shownTips) state.shownTips = {};
+    // 兼容旧武将：补齐经验、等级、装备
+    state.generals.forEach(g=>{
+      if(g.exp===undefined) g.exp=0;
+      if(g.level===undefined) g.level=1;
+      if(!g.equipment) g.equipment={weapon:null,armor:null,horse:null};
+    });
   }
 
   window.onerror = (msg)=>{ log('系统错误：'+msg); return true; };
