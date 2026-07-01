@@ -1259,7 +1259,7 @@
       html += `<p>无可用军团或城池。</p>`;
     } else {
       html += `<div style="margin:8px 0">
-        <label>军团：</label><select id="atk-army">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
+        <label>军团：</label><select id="atk-army" onchange="window.updateAtkTargets()">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
         <label> 目标城：</label><select id="atk-to"><option value="">请先选军团</option></select>
         <label> 战术：</label><select id="atk-tactic">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
         <button class="action" onclick="window.doArmyAttack()">出征</button>
@@ -1288,27 +1288,8 @@
     const armySel = document.getElementById('atk-army');
     const toSel = document.getElementById('atk-to');
     if (armySel && toSel) {
-      const updateTargets = () => {
-        const armyId = parseInt(armySel.value, 10);
-        const army = isNaN(armyId) ? null : findArmy(armyId);
-        const fromCity = army && army.city ? findCity(army.city) : pcities[0];
-        if (!fromCity) { toSel.innerHTML = '<option value="">无出发城池</option>'; return; }
-        const neighbors = fromCity.neighbors || [];
-        const opts = neighbors.map(n => {
-          const t = findCity(n);
-          if (!t) return '';
-          return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
-        }).join('');
-        toSel.innerHTML = opts || '<option value="">无相邻目标</option>';
-        // 默认选中第一个真实目标
-        if (toSel.options.length) {
-          const firstReal = Array.from(toSel.options).find(o => o.value);
-          if (firstReal) toSel.value = firstReal.value;
-        }
-      };
-      armySel.addEventListener('change', updateTargets);
-      // 确保初始渲染时根据默认选中的军团填充目标
-      updateTargets();
+      armySel.addEventListener('change', window.updateAtkTargets);
+      window.updateAtkTargets();
       const tacticSel = document.getElementById('atk-tactic');
       const tacticDesc = document.getElementById('tactic-desc');
       if (tacticSel && tacticDesc) {
@@ -1325,6 +1306,27 @@
       }
     }
   }
+
+  window.updateAtkTargets = () => {
+    const armySel = document.getElementById('atk-army');
+    const toSel = document.getElementById('atk-to');
+    if (!armySel || !toSel) return;
+    const armyId = parseInt(armySel.value, 10);
+    const army = isNaN(armyId) ? null : findArmy(armyId);
+    const fromCity = army && army.city ? findCity(army.city) : factionCities(state.playerId)[0];
+    if (!fromCity) { toSel.innerHTML = '<option value="">无出发城池</option>'; return; }
+    const neighbors = fromCity.neighbors || [];
+    const opts = neighbors.map(n => {
+      const t = findCity(n);
+      if (!t) return '';
+      return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
+    }).join('');
+    toSel.innerHTML = opts || '<option value="">无相邻目标</option>';
+    if (toSel.options.length) {
+      const firstReal = Array.from(toSel.options).find(o => o.value);
+      if (firstReal) toSel.value = firstReal.value;
+    }
+  };
 
   window.reinforceCity = (dir)=>{
     const p = player();
