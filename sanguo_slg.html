@@ -1310,10 +1310,15 @@
   window.updateAtkTargets = () => {
     const armySel = document.getElementById('atk-army');
     const toSel = document.getElementById('atk-to');
-    if (!armySel || !toSel) return;
-    const armyId = parseInt(armySel.value, 10);
+    console.log('[updateAtkTargets] armySel:', armySel, 'toSel:', toSel);
+    if (!armySel || !toSel) { console.log('[updateAtkTargets] missing select'); return; }
+    const raw = armySel.value;
+    const armyId = parseInt(raw, 10);
+    console.log('[updateAtkTargets] raw value:', raw, 'parsed:', armyId);
     const army = isNaN(armyId) ? null : findArmy(armyId);
+    console.log('[updateAtkTargets] found army:', army ? army.name : null);
     const fromCity = army && army.city ? findCity(army.city) : factionCities(state.playerId)[0];
+    console.log('[updateAtkTargets] fromCity:', fromCity ? fromCity.name : null, 'neighbors:', fromCity ? fromCity.neighbors : null);
     if (!fromCity) { toSel.innerHTML = '<option value="">无出发城池</option>'; return; }
     const neighbors = fromCity.neighbors || [];
     const opts = neighbors.map(n => {
@@ -1321,11 +1326,13 @@
       if (!t) return '';
       return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
     }).join('');
+    console.log('[updateAtkTargets] opts html:', opts || '(empty)');
     toSel.innerHTML = opts || '<option value="">无相邻目标</option>';
     if (toSel.options.length) {
       const firstReal = Array.from(toSel.options).find(o => o.value);
       if (firstReal) toSel.value = firstReal.value;
     }
+    console.log('[updateAtkTargets] final toSel value:', toSel.value, 'innerHTML:', toSel.innerHTML);
   };
 
   window.reinforceCity = (dir)=>{
@@ -1353,11 +1360,13 @@
     const armySel = document.getElementById('atk-army');
     const toSel = document.getElementById('atk-to');
     const tacticSel = document.getElementById('atk-tactic');
+    console.log('[doArmyAttack] armySel:', armySel, 'toSel:', toSel, 'tacticSel:', tacticSel);
     if (!armySel || !toSel || !tacticSel) { alert('界面未就绪，请重新打开军事面板'); return; }
     const rawArmyId = armySel.value;
     const armyId = parseInt(rawArmyId, 10);
     const toName = toSel.value;
     const tacticKey = tacticSel.value;
+    console.log('[doArmyAttack] rawArmyId:', rawArmyId, 'armyId:', armyId, 'toName:', toName, 'tacticKey:', tacticKey);
     if (!rawArmyId || rawArmyId === '' || isNaN(armyId)) { alert('请选择出征军团'); return; }
     const army = findArmy(armyId);
     if (!army) { alert('所选军团不存在或已解散'); return; }
