@@ -1289,10 +1289,12 @@
     const toSel = document.getElementById('atk-to');
     if (armySel && toSel) {
       const updateTargets = () => {
-        const army = findArmy(parseInt(armySel.value));
+        const armyId = parseInt(armySel.value, 10);
+        const army = isNaN(armyId) ? null : findArmy(armyId);
         const fromCity = army && army.city ? findCity(army.city) : pcities[0];
         if (!fromCity) { toSel.innerHTML = '<option value="">无出发城池</option>'; return; }
-        const opts = fromCity.neighbors.map(n => {
+        const neighbors = fromCity.neighbors || [];
+        const opts = neighbors.map(n => {
           const t = findCity(n);
           if (!t) return '';
           return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
@@ -1305,12 +1307,14 @@
         }
       };
       armySel.addEventListener('change', updateTargets);
+      // 确保初始渲染时根据默认选中的军团填充目标
       updateTargets();
       const tacticSel = document.getElementById('atk-tactic');
       const tacticDesc = document.getElementById('tactic-desc');
       if (tacticSel && tacticDesc) {
         const updateTacticDesc = () => {
-          const army = findArmy(parseInt(armySel.value));
+          const armyId = parseInt(armySel.value, 10);
+          const army = isNaN(armyId) ? null : findArmy(armyId);
           const main = army && army.generals.length ? findGeneral(army.generals[0]) : null;
           const t = TACTICS[tacticSel.value] || TACTICS.normal;
           const ok = !t.req || t.req(main, null);
