@@ -1298,7 +1298,11 @@
           return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
         }).join('');
         toSel.innerHTML = opts || '<option value="">无相邻目标</option>';
-        if (toSel.options.length && toSel.options[0].value) toSel.value = toSel.options[0].value;
+        // 默认选中第一个真实目标
+        if (toSel.options.length) {
+          const firstReal = Array.from(toSel.options).find(o => o.value);
+          if (firstReal) toSel.value = firstReal.value;
+        }
       };
       armySel.addEventListener('change', updateTargets);
       updateTargets();
