@@ -1350,8 +1350,9 @@
     if (!armySel.value || isNaN(armyId)) { alert('请选择出征军团'); return; }
     const army = findArmy(armyId);
     if (!army) { alert('所选军团不存在或已解散'); return; }
+    if (!toName) { alert('请选择目标城池'); return; }
     const target = findCity(toName);
-    if (!target) { alert('请选择有效目标城池'); return; }
+    if (!target) { alert('目标城池不存在'); return; }
     if(target.owner===state.playerId) { alert('不能攻击己方城池'); return; }
     if(target.owner && relation(state.playerId,target.owner)>=80) { alert('不能攻击盟友'); return; }
     const fromCity = army.city ? findCity(army.city) : factionCities(state.playerId)[0];
