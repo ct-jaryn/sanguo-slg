@@ -1258,9 +1258,17 @@
     if (myArmies.length === 0 || pcities.length === 0) {
       html += `<p>无可用军团或城池。</p>`;
     } else {
+      const defaultArmy = myArmies[0];
+      const fromCity = defaultArmy && defaultArmy.city ? findCity(defaultArmy.city) : pcities[0];
+      const neighborOpts = fromCity && fromCity.neighbors ? fromCity.neighbors.map(n => {
+        const t = findCity(n);
+        if (!t) return '';
+        return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
+      }).join('') : '';
+      const toOptions = neighborOpts || '<option value="">无相邻目标</option>';
       html += `<div style="margin:8px 0">
         <label>军团：</label><select id="atk-army" onchange="window.updateAtkTargets()">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
-        <label> 目标城：</label><select id="atk-to"><option value="">请先选军团</option></select>
+        <label> 目标城：</label><select id="atk-to">${toOptions}</select>
         <label> 战术：</label><select id="atk-tactic">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
         <button class="action" onclick="window.doArmyAttack()">出征</button>
       </div>`;
