@@ -1094,6 +1094,12 @@
     c.innerHTML = topHtml + contentDiv.innerHTML;
   }
 
+  window.dismissTip = (tab) => {
+    if (!state.shownTips) state.shownTips = {};
+    state.shownTips[tab] = true;
+    renderContent();
+  };
+
   function renderAchievements(c) {
     initStats();
     if (!state.achievements) state.achievements = {};
