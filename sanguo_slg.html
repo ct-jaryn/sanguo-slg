@@ -190,6 +190,7 @@
     .tutorial-box {
       background: var(--panel); border: 2px solid var(--border); border-radius: 8px;
       padding: 24px; max-width: 560px; width: 90%;
+      pointer-events: auto;
     }
     .tutorial-box h2 { color: var(--accent-red); margin-top: 0; }
     .tutorial-box ul { margin: 12px 0; padding-left: 20px; }
@@ -2141,7 +2142,8 @@
 
   window.showTutorialStep = () => {
     if (!state.tutorial) return;
-    const idx = state.tutorialStep || 0;
+    let idx = state.tutorialStep || 0;
+    if (idx >= TUTORIAL_STEPS.length) { window.closeTutorial(); return; }
     const step = TUTORIAL_STEPS[idx];
     if (!step) { window.closeTutorial(); return; }
     if (step.tab) window.switchTab(step.tab);
@@ -2166,9 +2168,9 @@
   };
 
   window.nextTutorialStep = () => {
-    state.tutorialStep = (state.tutorialStep || 0) + 1;
-    if (state.tutorialStep >= TUTORIAL_STEPS.length) window.closeTutorial();
-    else window.showTutorialStep();
+    const next = (state.tutorialStep || 0) + 1;
+    if (next >= TUTORIAL_STEPS.length) window.closeTutorial();
+    else { state.tutorialStep = next; window.showTutorialStep(); }
   };
 
   window.prevTutorialStep = () => {
