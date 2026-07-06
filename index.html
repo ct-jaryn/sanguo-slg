@@ -2,10 +2,35 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=sanguo_slg.html">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>三国风云·轻量 SLG</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/map.css">
+  <link rel="stylesheet" href="css/animations.css">
 </head>
 <body>
-  <p>正在进入 <a href="sanguo_slg.html">三国风云·轻量 SLG</a>...</p>
+<div id="app">
+  <header>
+    <h1>三国风云·轻量 SLG</h1>
+    <div class="top-resources">
+      <span id="h-res"></span>
+      <span id="h-date"></span>
+      <span id="h-season"></span>
+    </div>
+  </header>
+  <div class="main">
+    <aside id="sidebar"></aside>
+    <div id="content"></div>
+  </div>
+  <div id="log-panel"><h3>事件日志</h3><div id="logs"></div></div>
+</div>
+<div class="modal-overlay" id="modal"><div class="modal" id="modal-content"></div></div>
+<div class="tutorial-overlay" id="tutorial">
+  <div class="tutorial-box" id="tutorial-box"></div>
+</div>
+<div class="battle-fx" id="battle-fx"></div>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

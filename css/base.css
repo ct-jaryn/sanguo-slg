@@ -1,0 +1,22 @@
+:root {
+  --bg: #f5e6c8;
+  --panel: #fff8e7;
+  --border: #8b4513;
+  --accent-red: #c41e3a;
+  --accent-green: #1a5c1a;
+  --accent-blue: #2980b9;
+  --accent-purple: #8e44ad;
+  --accent-orange: #e67e22;
+  --text: #3d2b1f;
+  --muted: #6d5a4b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}

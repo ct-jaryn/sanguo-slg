@@ -1,0 +1,40 @@
+.tutorial-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 250;
+}
+
+.tutorial-box {
+  background: var(--panel); border: 2px solid var(--border); border-radius: 8px;
+  padding: 24px; max-width: 560px; width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.tutorial-box h2 { color: var(--accent-red); margin-top: 0; }
+
+.tutorial-box ul { margin: 12px 0; padding-left: 20px; }
+
+.tutorial-box li { margin: 6px 0; }
+
+.tutorial-target { position: relative; z-index: 201; box-shadow: 0 0 0 4px var(--accent-orange); animation: tutorialPulse 1.2s infinite; border-radius: 4px; }
+
+@keyframes tutorialPulse { 0% { box-shadow: 0 0 0 2px var(--accent-orange); } 50% { box-shadow: 0 0 0 6px rgba(230,126,34,0.4); } 100% { box-shadow: 0 0 0 2px var(--accent-orange); } }
+
+.battle-fx { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; z-index: 150; pointer-events: none; }
+
+.battle-fx.active { display: flex; }
+
+.battle-fx .fx-text { font-size: 2.2rem; font-weight: bold; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.8); animation: battlePop 0.7s ease-out forwards; }
+
+.battle-fx .fx-text.defeat { color: #ff6b6b; }
+
+.battle-shake { animation: battleShake 0.4s ease-in-out; }
+
+@keyframes battleShake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-4px); } }
+
+@keyframes battlePop { 0% { transform: scale(0.5); opacity: 0; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+
+.achievement-pop { position: fixed; top: 16px; right: 16px; background: var(--panel); border: 2px solid var(--accent-green); border-radius: 8px; padding: 12px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 160; animation: slideIn 0.5s ease-out; }
+
+@keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
