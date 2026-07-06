@@ -1,12 +1,13 @@
 import { getState } from '../core/state.js';
+import { log } from '../core/log.js';
 import {
   findCity, availableGenerals, armyTroopTotal, findGeneral, factionCities,
-  factionArmies, relation, setRelation, effectiveStats, log
+  factionArmies, relation, setRelation, effectiveStats
 } from '../core/utils.js';
-import { AI_COMP_PREFS, FORMATIONS, RIVER_CITIES, DIFFICULTY } from '../config/constants.js';
+import { AI_COMP_PREFS, RIVER_CITIES, DIFFICULTY } from '../config/constants.js';
 import { TACTICS } from '../config/tactics.js';
-import { BONDS } from '../config/bonds.js';
 import { battle, armyBattle } from '../core/battle.js';
+import { checkAchievements } from './achievements.js';
 
 function aiArmyTacticHint(f, city) {
   const nearby = city.neighbors.map(n => findCity(n)).filter(Boolean);
@@ -69,50 +70,6 @@ function chooseAITroopType(general, targetCity) {
   return 'infantry';
 }
 
-// ---------- 武将羁绊 ----------
-function getArmyBondBonus(army) {
-  const mods = { forceMul: 1, atkMul: 1, defMul: 1, moraleMul: 1, woundExtra: 0 };
-  const active = [];
-  if (!army || !army.generals.length) return { mods, active };
-  BONDS.forEach(bond => {
-    const need = bond.require || bond.members.length;
-    const matched = bond.members.filter(name => army.generals.includes(name));
-    if (matched.length >= need) {
-      active.push(bond);
-      const bonus = bond.bonus;
-      if (bonus.forceMul) mods.forceMul *= bonus.forceMul;
-      if (bonus.atkMul) mods.atkMul *= bonus.atkMul;
-      if (bonus.defMul) mods.defMul *= bonus.defMul;
-      if (bonus.moraleMul) mods.moraleMul *= bonus.moraleMul;
-      if (bonus.woundExtra) mods.woundExtra += bonus.woundExtra;
-    }
-  });
-  return { mods, active };
-}
-
-function getFormationMods(army) {
-  const f = FORMATIONS[army.formation] || FORMATIONS.yulin;
-  const total = armyTroopTotal(army);
-  const share = total ? { infantry: army.infantry / total, cavalry: army.cavalry / total, archer: army.archer / total } : { infantry: 0, cavalry: 0, archer: 0 };
-  const mods = { atkMul: f.atk, defMul: f.def, lossMul: f.lossMul || 1 };
-  if (f.cavalryAtk && share.cavalry >= 0.4) mods.atkMul *= 1 + f.cavalryAtk;
-  if (f.archerAtk && share.archer >= 0.4) mods.atkMul *= 1 + f.archerAtk;
-  if (f.infantryDef && share.infantry >= 0.4) mods.defMul *= 1 + f.infantryDef;
-  return mods;
-}
-
-function applyTroopTraitMods(army, targetCity, side, mods) {
-  const total = armyTroopTotal(army);
-  if (!total) return;
-  const share = { infantry: army.infantry / total, cavalry: army.cavalry / total, archer: army.archer / total };
-  if (side === 'attack') {
-    if (share.cavalry >= 0.4) mods.atkMul *= 1.15;
-    if (share.archer >= 0.4 && targetCity.troops > 1500) mods.atkMul *= 1.1;
-  } else {
-    if (share.infantry >= 0.4) mods.defMul *= 1.1;
-  }
-}
-
 function aiTurn(f) {
   const st = getState();
   const cities = factionCities(f.id);
@@ -154,7 +111,7 @@ function aiTurn(f) {
   }
   // Diplomatic AI ally
   if(f.personality==='diplomatic' && Math.random()<0.4){
-    const candidates = Object.values(st.factions).filter(o=>o.id!==f.id && relation(f.id,o.id)>30 && !f.allies.includes(o.id));
+    const candidates = Object.values(st.factions).filter(o=>o.id!==f.id && !o.eliminated && relation(f.id,o.id)>30 && !f.allies.includes(o.id));
     if(candidates.length){
       const t = candidates[Math.floor(Math.random()*candidates.length)];
       f.gold-=500; setRelation(f.id,t.id,relation(f.id,t.id)+30);
@@ -185,6 +142,7 @@ function aiTurn(f) {
           const use = Math.min(f.troops, Math.max(500, Math.floor(atk.to.troops*1.2)));
           const troopType = chooseAITroopType(gen, atk.to);
           battle(f.id, atk.to.owner||'neutral', gen, use, atk.to, troopType);
+          checkAchievements();
           if(Math.random()<0.7) break;
         }
       }
@@ -269,6 +227,7 @@ function aiArmyAttack(f) {
         if(atk.to.owner) setRelation(f.id,atk.to.owner,-100);
         const tactic = chooseAITactic(atk.army, atk.to);
         armyBattle(f.id, atk.to.owner||'neutral', atk.army, atk.to, tactic);
+        checkAchievements();
         if(Math.random()<0.6) break;
       }
     }
@@ -277,6 +236,5 @@ function aiArmyAttack(f) {
 
 export {
   aiArmyTacticHint, getOptimalAIComp, pickAIGenerals, chooseAITroopType,
-  getArmyBondBonus, getFormationMods, applyTroopTraitMods,
   aiTurn, chooseAIPolicy, chooseAITactic, aiArmyAttack
 };

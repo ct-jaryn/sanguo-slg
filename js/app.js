@@ -1,10 +1,9 @@
 import { initState } from './core/state.js';
-import { log } from './core/utils.js';
+import { log } from './core/log.js';
 import { renderAll } from './ui/renderer.js';
-import { switchTab } from './ui/renderer.js';
-import { closeModal, showBattleReport } from './ui/modal.js';
+import { closeModal, switchTab } from './ui/common.js';
 import {
-  showTutorialStep, nextTutorialStep, prevTutorialStep, skipTutorial
+  showTutorialStep, nextTutorialStep, prevTutorialStep, skipTutorial, closeTutorial
 } from './systems/tutorial.js';
 import {
   doInternal, setDifficulty, setPolicy
@@ -17,22 +16,12 @@ import {
 } from './ui/tabs/talent.js';
 import { doDiplomacy } from './ui/tabs/diplomacy.js';
 import {
-  renderEvents, renderLogPage, renderAchievements, dismissTip, resolvePlayerEvent
+  dismissTip, resolvePlayerEvent
 } from './ui/tabs/events.js';
 import {
   saveGame, exportEncryptedSave, importEncryptedSave, promptImportSave, loadGame
 } from './systems/save.js';
 import { nextTurn } from './systems/economy.js';
-
-function showTutorial() {
-  showTutorialStep();
-}
-
-function closeTutorial() {
-  const overlay = document.getElementById('tutorial');
-  if (overlay) overlay.style.display = 'none';
-  document.querySelectorAll('.tutorial-target').forEach(el => el.classList.remove('tutorial-target'));
-}
 
 function initGame() {
   initState();
@@ -43,10 +32,9 @@ window.addEventListener('DOMContentLoaded', () => {
   window.initGame = initGame;
   window.switchTab = switchTab;
   window.closeModal = closeModal;
-  window.showBattleReport = showBattleReport;
 
-  window.showTutorial = showTutorial;
   window.closeTutorial = closeTutorial;
+  window.showTutorial = showTutorialStep;
   window.showTutorialStep = showTutorialStep;
   window.nextTutorialStep = nextTutorialStep;
   window.prevTutorialStep = prevTutorialStep;
@@ -75,11 +63,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
   window.saveGame = saveGame;
   window.exportEncryptedSave = exportEncryptedSave;
-  window.importEncryptedSave = importEncryptedSave;
+  window.importEncryptedSave = (input) => { if (importEncryptedSave(input)) renderAll(); };
   window.promptImportSave = promptImportSave;
-  window.loadGame = loadGame;
+  window.loadGame = () => { if (loadGame()) renderAll(); };
 
-  window.nextTurn = nextTurn;
+  window.nextTurn = () => { nextTurn(); renderAll(); };
 
   window.onerror = (msg) => { log('系统错误：' + msg); return true; };
 

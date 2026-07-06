@@ -1,13 +1,9 @@
 import { getState } from '../core/state.js';
+import { log } from '../core/log.js';
 import {
-  log, getSeason, player, factionCities, findCity, findGeneral, availableGenerals,
-  relation, setRelation, factionGenerals
+  getSeason, player, factionCities, factionGenerals, findCity, findGeneral, setRelation
 } from '../core/utils.js';
 import { EVENTS } from '../config/events.js';
-import { SKILLS } from '../config/skills.js';
-import { BONDS } from '../config/bonds.js';
-import { TROOP_TYPES, DIFFICULTY } from '../config/constants.js';
-import { playSound } from './audio.js';
 import { checkAchievements } from './achievements.js';
 
 const EVENT_CHAINS = {
@@ -152,7 +148,7 @@ function historicalEvents() {
   if(y>=8 && y<=12 && !getState().eventsTriggered.jingzhouLost){
     const guanyu = findGeneral('关羽');
     const jz = findCity('荆州');
-    if(guanyu && guanyu.faction==='liu' && jz.owner==='liu' && getState().factions.sun && !getState().factions.sun.eliminated && Math.random()<0.2){
+    if(guanyu && guanyu.faction==='liu' && jz && jz.owner==='liu' && getState().factions.sun && !getState().factions.sun.eliminated && Math.random()<0.2){
       getState().eventsTriggered.jingzhouLost=true;
       jz.owner='sun'; jz.troops=Math.floor(jz.troops*0.7);
       log(`大意失荆州：孙权偷袭荆州，关羽败走麦城！`);

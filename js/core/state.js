@@ -1,7 +1,7 @@
 import { makeGenerals } from '../data/generals.js';
 import { makeCities } from '../data/cities.js';
 import { makeFactions } from '../data/factions.js';
-import { log } from './utils.js';
+import { log, setLogState } from './log.js';
 
 let state;
 let selectedTab = 'internal';
@@ -44,6 +44,7 @@ function initState() {
     eventChains: {},
     endingTitle: null
   };
+  setLogState(state);
   log('游戏开始！公元190年，乱世群雄并起。');
   if(state.tutorial) setTimeout(()=>{ window.showTutorialStep(); }, 100);
 }

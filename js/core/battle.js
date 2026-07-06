@@ -1,19 +1,18 @@
 import { getState } from './state.js';
+import { log } from './log.js';
 import {
   armyTroopTotal, findGeneral, factionGenerals, effectiveStats, addGeneralExp,
-  findArmy, factionArmies, disbandArmiesAt, factionCities, log
+  disbandArmiesAt, factionCities
 } from './utils.js';
 import {
-  TROOP_TYPES, COUNTER_BONUS, cityDefenseComp, counterFactor, RIVER_CITIES
+  TROOP_TYPES, COUNTER_BONUS, cityDefenseComp, counterFactor, RIVER_CITIES,
+  FORMATIONS
 } from '../config/constants.js';
+import { BONDS } from '../config/bonds.js';
 import { TACTICS } from '../config/tactics.js';
 import { SKILLS } from '../config/skills.js';
-import { getFormationMods, getArmyBondBonus, applyTroopTraitMods } from '../systems/ai.js';
-import { awardRandomEquipment } from '../systems/economy.js';
-import { showBattleFx } from '../ui/renderer.js';
-import { showBattleReport } from '../ui/modal.js';
-import { playSound } from '../systems/audio.js';
-import { checkAchievements } from '../systems/achievements.js';
+import { EQUIPMENT_POOL } from '../config/equipment.js';
+
 
 function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal') {
   const total = armyTroopTotal(army);
@@ -24,7 +23,6 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   const atkForm = getFormationMods(army);
   const lossMul = atkForm.lossMul;
   const playerInvolved = attackerId === getState().playerId || defenderId === getState().playerId;
-  if (playerInvolved) playSound('attack');
 
   // 围城：多回合消耗，第一次不判定胜负
   if (tacticKey === 'siege') {
@@ -51,19 +49,19 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
       targetCity.siegeProgress = null;
       log(`${atkFaction.name} 的 ${army.name}(${mainGeneral?mainGeneral.name:'无将'}) 攻占了 ${targetCity.name}！围城成功`);
       if(oldOwner && getState().factions[oldOwner] && factionCities(oldOwner).length===0) log(`${getState().factions[oldOwner].name} 势力灭亡！`);
-      if (playerInvolved) {
-        showBattleFx('大捷！');
-        playSound('victory');
-        showBattleReport({
+      return {
+        playerInvolved, victory: true,
+        report: {
           attacker: atkFaction.name, armyName: army.name, mainGeneral: mainGeneral ? mainGeneral.name : '无将',
           defender: oldOwner && getState().factions[oldOwner] ? getState().factions[oldOwner].name : '无主守军',
           cityName: targetCity.name, tacticName: tactic.name, victory: true,
           atkLosses: losses, defLosses: Math.max(0, targetCity.troops),
           reward: 0, equipment: null, bonds: bond.active.map(b => `攻：${b.name}`)
-        });
-      }
+        },
+        fxText: '大捷！', sound: 'victory'
+      };
     }
-    return;
+    return { playerInvolved, victory: false, report: null, fxText: null, sound: null };
   }
   // 非围城清除 siegeProgress
   if (targetCity.siegeProgress && targetCity.siegeProgress.attackerId === attackerId) targetCity.siegeProgress = null;
@@ -185,12 +183,12 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     report.reward = 0;
     report.equipment = null;
   }
-  if (playerInvolved) {
-    showBattleFx(victory ? '大捷！' : '败退', victory ? '' : 'defeat');
-    playSound(victory ? 'victory' : 'defeat');
-    showBattleReport(report);
-  }
-  checkAchievements();
+  return {
+    playerInvolved, victory,
+    report,
+    fxText: victory ? '大捷！' : '败退',
+    sound: victory ? 'victory' : 'defeat'
+  };
 }
 
 function applyArmyLosses(army, total, losses) {
@@ -201,6 +199,7 @@ function applyArmyLosses(army, total, losses) {
 }
 
 function battle(attackerId, defenderId, general, atkTroops, targetCity, troopTypeKey) {
+  const playerInvolved = attackerId === getState().playerId || defenderId === getState().playerId;
   const atkFaction = getState().factions[attackerId];
   const troopType = TROOP_TYPES[troopTypeKey];
   const defTroops = targetCity.troops;
@@ -266,7 +265,71 @@ function battle(attackerId, defenderId, general, atkTroops, targetCity, troopTyp
     if (defGeneral) addGeneralExp(defGeneral, 15);
     log(`${atkFaction.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
   }
-  checkAchievements();
+  return { playerInvolved, victory, report: null, fxText: null, sound: null };
 }
 
-export { armyBattle, battle, applyArmyLosses };
+function getArmyBondBonus(army) {
+  const mods = { forceMul: 1, atkMul: 1, defMul: 1, moraleMul: 1, woundExtra: 0 };
+  const active = [];
+  if (!army || !army.generals.length) return { mods, active };
+  BONDS.forEach(bond => {
+    const need = bond.require || bond.members.length;
+    const matched = bond.members.filter(name => army.generals.includes(name));
+    if (matched.length >= need) {
+      active.push(bond);
+      const bonus = bond.bonus;
+      if (bonus.forceMul) mods.forceMul *= bonus.forceMul;
+      if (bonus.atkMul) mods.atkMul *= bonus.atkMul;
+      if (bonus.defMul) mods.defMul *= bonus.defMul;
+      if (bonus.moraleMul) mods.moraleMul *= bonus.moraleMul;
+      if (bonus.woundExtra) mods.woundExtra += bonus.woundExtra;
+    }
+  });
+  return { mods, active };
+}
+
+function getFormationMods(army) {
+  const f = FORMATIONS[army.formation] || FORMATIONS.yulin;
+  const total = armyTroopTotal(army);
+  const share = total ? { infantry: army.infantry / total, cavalry: army.cavalry / total, archer: army.archer / total } : { infantry: 0, cavalry: 0, archer: 0 };
+  const mods = { atkMul: f.atk, defMul: f.def, lossMul: f.lossMul || 1 };
+  if (f.cavalryAtk && share.cavalry >= 0.4) mods.atkMul *= 1 + f.cavalryAtk;
+  if (f.archerAtk && share.archer >= 0.4) mods.atkMul *= 1 + f.archerAtk;
+  if (f.infantryDef && share.infantry >= 0.4) mods.defMul *= 1 + f.infantryDef;
+  return mods;
+}
+
+function applyTroopTraitMods(army, targetCity, side, mods) {
+  const total = armyTroopTotal(army);
+  if (!total) return;
+  const share = { infantry: army.infantry / total, cavalry: army.cavalry / total, archer: army.archer / total };
+  if (side === 'attack') {
+    if (share.cavalry >= 0.4) mods.atkMul *= 1.15;
+    if (share.archer >= 0.4 && targetCity.troops > 1500) mods.atkMul *= 1.1;
+  } else {
+    if (share.infantry >= 0.4) mods.defMul *= 1.1;
+  }
+}
+
+function awardRandomEquipment() {
+  const pool = EQUIPMENT_POOL.filter(it => !it.owned);
+  if (!pool.length) return null;
+  const weights = pool.map(it => it.rarity);
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) {
+      pool[i].owned = true;
+      return pool[i];
+    }
+  }
+  pool[0].owned = true;
+  return pool[0];
+}
+
+export {
+  armyBattle, battle, applyArmyLosses,
+  getArmyBondBonus, getFormationMods, applyTroopTraitMods,
+  awardRandomEquipment
+};

@@ -1,14 +1,16 @@
 import { getState } from '../../core/state.js';
+import { log } from '../../core/log.js';
 import {
-  log, player, factionCities, factionGenerals, findCity, findGeneral,
+  player, factionCities, findCity, findGeneral,
   relation, setRelation, factionArmies, findArmy, armyTroopTotal,
-  availableGenerals, disbandArmiesAt
+  availableGenerals
 } from '../../core/utils.js';
-import { TROOP_TYPES, FORMATIONS } from '../../config/constants.js';
+import { FORMATIONS } from '../../config/constants.js';
 import { TACTICS } from '../../config/tactics.js';
-import { battle, armyBattle } from '../../core/battle.js';
-import { renderAll } from '../renderer.js';
-import { closeModal } from '../modal.js';
+import { armyBattle } from '../../core/battle.js';
+import { showBattleFx, showBattleReport, renderAll, closeModal } from '../common.js';
+import { playSound } from '../../systems/audio.js';
+import { checkAchievements } from '../../systems/achievements.js';
 
 function renderMilitary(c) {
   const state = getState();
@@ -113,15 +115,11 @@ function updateAtkTargets() {
   const state = getState();
   const armySel = document.getElementById('atk-army');
   const toSel = document.getElementById('atk-to');
-  console.log('[updateAtkTargets] armySel:', armySel, 'toSel:', toSel);
-  if (!armySel || !toSel) { console.log('[updateAtkTargets] missing select'); return; }
+  if (!armySel || !toSel) return;
   const raw = armySel.value;
   const armyId = parseInt(raw, 10);
-  console.log('[updateAtkTargets] raw value:', raw, 'parsed:', armyId);
   const army = isNaN(armyId) ? null : findArmy(armyId);
-  console.log('[updateAtkTargets] found army:', army ? army.name : null);
   const fromCity = army && army.city ? findCity(army.city) : factionCities(state.playerId)[0];
-  console.log('[updateAtkTargets] fromCity:', fromCity ? fromCity.name : null, 'neighbors:', fromCity ? fromCity.neighbors : null);
   if (!fromCity) { toSel.innerHTML = '<option value="">无出发城池</option>'; return; }
   const neighbors = fromCity.neighbors || [];
   const opts = neighbors.map(n => {
@@ -129,20 +127,21 @@ function updateAtkTargets() {
     if (!t) return '';
     return `<option value="${n}">${n}${t.owner ? ' (' + state.factions[t.owner].name + ')' : ' (无主)'}</option>`;
   }).join('');
-  console.log('[updateAtkTargets] opts html:', opts || '(empty)');
   toSel.innerHTML = opts || '<option value="">无相邻目标</option>';
   if (toSel.options.length) {
     const firstReal = Array.from(toSel.options).find(o => o.value);
     if (firstReal) toSel.value = firstReal.value;
   }
-  console.log('[updateAtkTargets] final toSel value:', toSel.value, 'innerHTML:', toSel.innerHTML);
 }
 
 function reinforceCity(dir) {
   const state = getState();
   const p = player();
-  const cityName = document.getElementById('gar-city').value;
-  const num = Math.max(0, parseInt(document.getElementById('gar-num').value)||0);
+  const cityEl = document.getElementById('gar-city');
+  const numEl = document.getElementById('gar-num');
+  if (!cityEl || !numEl) { alert('界面未就绪，请重新打开军事面板'); return; }
+  const cityName = cityEl.value;
+  const num = Math.max(0, parseInt(numEl.value)||0);
   const city = findCity(cityName);
   if(!city || city.owner!==state.playerId){ alert('请选择己方城池'); return; }
   if(num<100){ alert('数量至少100'); return; }
@@ -165,13 +164,11 @@ function doArmyAttack() {
   const armySel = document.getElementById('atk-army');
   const toSel = document.getElementById('atk-to');
   const tacticSel = document.getElementById('atk-tactic');
-  console.log('[doArmyAttack] armySel:', armySel, 'toSel:', toSel, 'tacticSel:', tacticSel);
   if (!armySel || !toSel || !tacticSel) { alert('界面未就绪，请重新打开军事面板'); return; }
   const rawArmyId = armySel.value;
   const armyId = parseInt(rawArmyId, 10);
   const toName = toSel.value;
   const tacticKey = tacticSel.value;
-  console.log('[doArmyAttack] rawArmyId:', rawArmyId, 'armyId:', armyId, 'toName:', toName, 'tacticKey:', tacticKey);
   if (!rawArmyId || rawArmyId === '' || isNaN(armyId)) { alert('请选择出征军团'); return; }
   const army = findArmy(armyId);
   if (!army) { alert('所选军团不存在或已解散'); return; }
@@ -189,7 +186,13 @@ function doArmyAttack() {
   const tactic = TACTICS[tacticKey];
   if(tactic.req && !tactic.req(mainGeneral, target)) { alert('当前主将不满足该战术条件'); return; }
   if(target.owner) setRelation(state.playerId,target.owner,-100);
-  armyBattle(state.playerId, target.owner||'neutral', army, target, tacticKey);
+  const result = armyBattle(state.playerId, target.owner||'neutral', army, target, tacticKey);
+  if (result && result.playerInvolved) {
+    showBattleFx(result.fxText, result.victory ? '' : 'defeat');
+    playSound(result.sound);
+    showBattleReport(result.report);
+    checkAchievements();
+  }
   renderAll();
 }
 
@@ -209,6 +212,7 @@ function openArmyEditor(armyId=null) {
 
   const modal = document.getElementById('modal');
   const content = document.getElementById('modal-content');
+  if (!modal || !content) return;
   modal.style.display='flex';
     content.innerHTML = `
     <h2>${army?'调整军团':'组建新军团'}</h2>
@@ -236,12 +240,15 @@ function saveArmy(armyId) {
   const infantry = Math.max(0, parseInt(document.getElementById('army-infantry').value)||0);
   const cavalry = Math.max(0, parseInt(document.getElementById('army-cavalry').value)||0);
   const archer = Math.max(0, parseInt(document.getElementById('army-archer').value)||0);
+  const existing = armyId ? findArmy(armyId) : null;
+  const existingTotal = existing ? armyTroopTotal(existing) : 0;
   const total = infantry + cavalry + archer;
-  if(total > p.troops + (armyId?armyTroopTotal(findArmy(armyId)):0)){ alert('兵力不足'); return; }
+  if(total > p.troops + existingTotal){ alert('兵力不足'); return; }
   if(total < 100){ alert('军团总兵力至少100'); return; }
 
   if(armyId){
-    const army = findArmy(armyId);
+    const army = existing;
+    if (!army) { alert('军团不存在'); return; }
     p.troops += armyTroopTotal(army);
     army.name = name; army.city = city; army.generals = gens; army.formation = formation;
     army.infantry = infantry; army.cavalry = cavalry; army.archer = archer;

@@ -1,11 +1,6 @@
 import { getState } from './state.js';
-import { cityDefenseComp, counterFactor } from '../config/constants.js';
 
-function log(msg) {
-  const state = getState();
-  state.logs.unshift(`[${state.year}年${state.month}月] ${msg}`);
-  if(state.logs.length>50) state.logs.pop();
-}
+import { log } from './log.js';
 
 function getSeason() {
   // 按真实四季分段：春3-5、夏6-8、秋9-11、冬12-2
@@ -20,8 +15,13 @@ function factionCities(fid) { return getState().cities.filter(c=>c.owner===fid);
 function factionGenerals(fid) { return getState().generals.filter(g=>g.faction===fid); }
 function findCity(name) { return getState().cities.find(c=>c.name===name); }
 function findGeneral(name) { return getState().generals.find(g=>g.name===name); }
-function relation(a,b) { return getState().relations[a][b]; }
-function setRelation(a,b,v) { getState().relations[a][b]=getState().relations[b][a]=Math.max(-100,Math.min(100,v)); }
+function relation(a,b) { return getState().relations[a]?.[b] ?? 20; }
+function setRelation(a,b,v) {
+  const rel = Math.max(-100,Math.min(100,v));
+  if(!getState().relations[a]) getState().relations[a] = {};
+  if(!getState().relations[b]) getState().relations[b] = {};
+  getState().relations[a][b]=getState().relations[b][a]=rel;
+}
 function factionArmies(fid) { return getState().armies.filter(a=>a.faction===fid); }
 function findArmy(id) { return getState().armies.find(a=>a.id===id); }
 function armyTroopTotal(a) { return a.infantry + a.cavalry + a.archer; }
@@ -60,10 +60,6 @@ function addGeneralExp(g, amount) {
   if(leveled) log(`${g.name} 升级至 Lv.${g.level}！`);
 }
 
-function equipNameList(g) {
-  return [g.equipment.weapon, g.equipment.armor, g.equipment.horse].filter(Boolean).map(e => e.name).join(', ') || '无';
-}
-
 function removeGeneralFromArmies(name) {
   getState().armies.forEach(a=>{ a.generals = a.generals.filter(n=>n!==name); });
 }
@@ -79,8 +75,8 @@ function disbandArmiesAt(cityName, factionId) {
 }
 
 export {
-  log, getSeason, player, factionCities, factionGenerals, findCity, findGeneral,
+  getSeason, player, factionCities, factionGenerals, findCity, findGeneral,
   relation, setRelation, factionArmies, findArmy, armyTroopTotal, availableGenerals,
   effectiveStats, generalExpToLevelUp, addGeneralExp,
-  equipNameList, removeGeneralFromArmies, disbandArmiesAt
+  removeGeneralFromArmies, disbandArmiesAt
 };

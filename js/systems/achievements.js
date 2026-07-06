@@ -1,5 +1,6 @@
 import { getState } from '../core/state.js';
-import { log, factionCities, factionGenerals, player } from '../core/utils.js';
+import { log } from '../core/log.js';
+import { factionCities, factionGenerals, player } from '../core/utils.js';
 import { playSound } from './audio.js';
 
 const ACHIEVEMENTS = [

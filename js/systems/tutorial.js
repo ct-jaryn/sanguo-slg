@@ -1,6 +1,6 @@
 import { getState } from '../core/state.js';
 import { saveAuto } from './save.js';
-import { renderAll } from '../ui/renderer.js';
+import { switchTab } from '../ui/common.js';
 
 const TUTORIAL_STEPS = [
   { title: '欢迎来到《三国风云·轻量 SLG》', msg: '你扮演刘备，目标是统一天下。本引导将带你熟悉核心界面。', target: null },
@@ -15,13 +15,19 @@ const TUTORIAL_STEPS = [
   { title: '准备就绪', msg: '每回合结束会结算资源并触发 AI 行动。现在点击「结束回合」开始你的征程吧！', target: '#sidebar' }
 ];
 
+function closeTutorial() {
+  const overlay = document.getElementById('tutorial');
+  if (overlay) overlay.style.display = 'none';
+  document.querySelectorAll('.tutorial-target').forEach(el => el.classList.remove('tutorial-target'));
+}
+
 function showTutorialStep() {
   if (!getState().tutorial) return;
   let idx = getState().tutorialStep || 0;
-  if (idx >= TUTORIAL_STEPS.length) { window.closeTutorial(); return; }
+  if (idx >= TUTORIAL_STEPS.length) { closeTutorial(); return; }
   const step = TUTORIAL_STEPS[idx];
-  if (!step) { window.closeTutorial(); return; }
-  if (step.tab) window.switchTab(step.tab);
+  if (!step) { closeTutorial(); return; }
+  if (step.tab) switchTab(step.tab);
   const overlay = document.getElementById('tutorial');
   const box = document.getElementById('tutorial-box');
   document.querySelectorAll('.tutorial-target').forEach(el => el.classList.remove('tutorial-target'));
@@ -62,4 +68,4 @@ function skipTutorial() {
   saveAuto();
 }
 
-export { TUTORIAL_STEPS, showTutorialStep, nextTutorialStep, prevTutorialStep, skipTutorial };
+export { showTutorialStep, nextTutorialStep, prevTutorialStep, skipTutorial, closeTutorial };

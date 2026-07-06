@@ -1,10 +1,9 @@
 import { getState } from '../core/state.js';
 import {
-  availableGenerals, factionCities, findCity, findGeneral,
+  availableGenerals, factionCities, findCity, getSeason,
   relation, setRelation, player
 } from '../core/utils.js';
 import { RIVER_CITIES } from './constants.js';
-import { getSeason } from '../core/utils.js';
 
 const EVENTS = [
   {
@@ -45,7 +44,13 @@ const EVENTS = [
     condition:()=>true,
     desc:(ctx)=>`一名隐士求见，自称有治国良策。`,
     choices:[
-      {label:'厚礼相待（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; const t=['farmBonus','commBonus','recruitBonus'][Math.floor(Math.random()*3)]; ctx.state.tech[t]+=(t==='recruitBonus'?20:10); return `隐士献计，${t==='farmBonus'?'农业':t==='commBonus'?'商业':'募兵'}科技提升。`; }},
+      {label:'厚礼相待（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{
+        ctx.faction.gold-=300;
+        const branch = ['farm','comm','military'][Math.floor(Math.random()*3)];
+        const key = branch==='farm'?'farmBonus':branch==='comm'?'commBonus':'recruitBonus';
+        ctx.state.tech[branch][key] += (branch==='military'?20:10);
+        return `隐士献计，${branch==='farm'?'农业':branch==='comm'?'商业':'募兵'}科技提升。`;
+      }},
       {label:'驱逐', effect:(ctx)=>'你赶走了这个来历不明的人。'}
     ]
   },

@@ -1,34 +1,15 @@
 import { getState } from '../core/state.js';
+import { log } from '../core/log.js';
 import {
-  factionCities, factionArmies, getSeason, relation, setRelation,
-  findCity, findGeneral, disbandArmiesAt, log
+  factionCities, factionArmies, getSeason, relation, setRelation
 } from '../core/utils.js';
 import { DIFFICULTY } from '../config/constants.js';
 import { POLICIES } from '../config/policies.js';
 import { SKILLS } from '../config/skills.js';
-import { EQUIPMENT_POOL } from '../config/equipment.js';
 import { aiTurn, aiArmyAttack } from './ai.js';
 import { historicalEvents, triggerSeasonEvent, randomEvent, triggerRandomEvent, autoResolveAllPending } from './eventSystem.js';
 import { checkEliminations, checkVictory, saveAuto } from './save.js';
 import { checkAchievements } from './achievements.js';
-import { renderAll } from '../ui/renderer.js';
-
-function awardRandomEquipment() {
-  const pool = EQUIPMENT_POOL.filter(it => !it.owned);
-  if (!pool.length) return null;
-  const weights = pool.map(it => it.rarity);
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  for (let i = 0; i < pool.length; i++) {
-    r -= weights[i];
-    if (r <= 0) {
-      pool[i].owned = true;
-      return pool[i];
-    }
-  }
-  pool[0].owned = true;
-  return pool[0];
-}
 
 function nextTurn() {
   const state = getState();
@@ -119,7 +100,6 @@ function nextTurn() {
   checkAchievements();
   autoResolveAllPending(); // 回合结束前自动处理未决的玩家事件
   saveAuto();
-  renderAll();
 }
 
-export { awardRandomEquipment, nextTurn };
+export { nextTurn };

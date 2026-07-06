@@ -1,10 +1,9 @@
 import { getState } from '../../core/state.js';
-import { log } from '../../core/utils.js';
+import { log } from '../../core/log.js';
 import { ACHIEVEMENTS, initStats } from '../../systems/achievements.js';
-import { resolveEvent, autoResolveEvent, buildEventContext } from '../../systems/eventSystem.js';
+import { resolveEvent, buildEventContext } from '../../systems/eventSystem.js';
 import { EVENTS } from '../../config/events.js';
-import { renderAll } from '../renderer.js';
-import { closeModal } from '../modal.js';
+import { renderAll } from '../common.js';
 
 function dismissTip(tab) {
   const state = getState();
@@ -46,7 +45,6 @@ function renderEvents(c) {
         <b>${evt.title}</b>
         <p style="margin:4px 0;color:var(--text)">${evt.desc}</p>
         <div>`;
-      const ev = EVENTS.find(e => e.id === evt.defId);
       const ctx = buildEventContext(evt);
       evt.choices.forEach(ch => {
         const ok = !ch.condition || ch.condition(ctx);

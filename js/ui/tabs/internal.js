@@ -1,10 +1,11 @@
 import { getState } from '../../core/state.js';
+import { log } from '../../core/log.js';
 import {
-  log, getSeason, player, factionCities, factionGenerals
+  getSeason, player, factionCities, factionGenerals
 } from '../../core/utils.js';
 import { POLICIES } from '../../config/policies.js';
 import { DIFFICULTY } from '../../config/constants.js';
-import { renderAll } from '../renderer.js';
+import { renderAll } from '../common.js';
 
 function renderInternal(c) {
   const state = getState();
@@ -82,7 +83,7 @@ function doInternal(type) {
   }else if(type==='tech' && p.gold>=500){
     // 兼容旧版研发科技：随机升级一个未满的科技
     p.gold-=500; const opts = ['farm','comm','military','fort'].filter(k=>state.tech[k].level<state.tech[k].max);
-    if(opts.length){ window.doInternal(`tech_${opts[Math.floor(Math.random()*opts.length)]}`); return; }
+    if(opts.length){ doInternal(`tech_${opts[Math.floor(Math.random()*opts.length)]}`); return; }
     log('所有科技已满级');
   }
   renderAll();

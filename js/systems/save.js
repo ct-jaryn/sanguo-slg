@@ -1,7 +1,7 @@
 import { getState, setState } from '../core/state.js';
-import { log, player, factionCities, factionArmies, armyTroopTotal } from '../core/utils.js';
+import { log } from '../core/log.js';
+import { player, factionCities, factionArmies, armyTroopTotal } from '../core/utils.js';
 import { SAVE_VERSION, DIFFICULTY } from '../config/constants.js';
-import { renderAll } from '../ui/renderer.js';
 
 function checkEliminations() {
   Object.values(getState().factions).forEach(f => {
@@ -59,17 +59,17 @@ function exportEncryptedSave() {
 function importEncryptedSave(input) {
   try {
     const raw = (input || '').trim();
-    if (!raw) { log('导入内容为空'); return; }
+    if (!raw) { log('导入内容为空'); return false; }
     const parts = raw.split('|');
-    if (parts.length !== 2) { log('导入格式错误'); return; }
+    if (parts.length !== 2) { log('导入格式错误'); return false; }
     const header = JSON.parse(atob(parts[0]));
     const decrypted = xorEncrypt(parts[1], header.exportedAt);
     const data = JSON.parse(decrypted);
-    if (header.v !== SAVE_VERSION) { log(`存档版本 ${header.v} 与当前版本 ${SAVE_VERSION} 不匹配`); return; }
+    if (header.v !== SAVE_VERSION) { log(`存档版本 ${header.v} 与当前版本 ${SAVE_VERSION} 不匹配`); return false; }
     deserializeState(data);
     log(`存档已导入（版本 ${header.v}，导出时间 ${header.exportedAt}）`);
-    renderAll();
-  } catch (e) { log('导入失败：' + e.message); }
+    return true;
+  } catch (e) { log('导入失败：' + e.message); return false; }
 }
 
 function promptImportSave() {
@@ -94,10 +94,12 @@ function downloadText(text, filename) {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
 }
 
-function showExportModal(combined, headerB64, filename) {
-  const header = JSON.parse(atob(headerB64));
+function showExportModal(combined, headerJson, filename) {
+  let header;
+  try { header = JSON.parse(headerJson); } catch (e) { header = { v: SAVE_VERSION, exportedAt: '' }; }
   const content = document.getElementById('modal-content');
   const modal = document.getElementById('modal');
+  if (!content || !modal) return;
   content.innerHTML = `
     <h2>导出加密存档</h2>
     <p class="hint">版本号：${header.v} · 导出时间：${header.exportedAt}</p>
@@ -112,11 +114,11 @@ function showExportModal(combined, headerB64, filename) {
 function loadGame() {
   try {
     const data = localStorage.getItem('sanguo_slg_save') || localStorage.getItem('sanguo_slg_autosave');
-    if (!data) { log('没有存档。'); return; }
+    if (!data) { log('没有存档。'); return false; }
     deserializeState(JSON.parse(data));
     log('游戏已读取。');
-    renderAll();
-  } catch (e) { log('读档失败：' + e.message); renderAll(); }
+    return true;
+  } catch (e) { log('读档失败：' + e.message); return false; }
 }
 
 function serializeState() {

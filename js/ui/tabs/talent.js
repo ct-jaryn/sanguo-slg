@@ -1,13 +1,13 @@
 import { getState } from '../../core/state.js';
+import { log } from '../../core/log.js';
 import {
-  log, player, factionGenerals, factionArmies, findGeneral, effectiveStats, equipNameList,
+  player, factionGenerals, factionArmies, findGeneral, effectiveStats,
   removeGeneralFromArmies, generalExpToLevelUp
 } from '../../core/utils.js';
 import { EQUIPMENT_POOL, EQUIPMENT_TYPES } from '../../config/equipment.js';
 import { BONDS } from '../../config/bonds.js';
 import { SKILL_NAMES } from '../../config/skills.js';
-import { renderAll } from '../renderer.js';
-import { closeModal } from '../modal.js';
+import { renderAll, closeModal } from '../common.js';
 
 function renderTalent(c) {
   const state = getState();
@@ -71,6 +71,7 @@ function openEquipShop() {
   const items = EQUIPMENT_POOL.filter(it => !it.owned).sort(() => Math.random() - 0.5).slice(0, 4);
   const modal = document.getElementById('modal');
   const content = document.getElementById('modal-content');
+  if (!modal || !content) return;
   modal.style.display = 'flex';
   content.innerHTML = `
     <h2>装备商店</h2>

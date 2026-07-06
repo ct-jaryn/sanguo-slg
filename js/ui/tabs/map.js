@@ -1,6 +1,6 @@
 import { getState } from '../../core/state.js';
 import { findCity, factionCities } from '../../core/utils.js';
-import { switchTab } from '../renderer.js';
+import { switchTab } from '../common.js';
 
 function renderMap(c) {
   const state = getState();
@@ -53,7 +53,8 @@ function renderMap(c) {
     <div class="card"><h3>城池数据</h3>
     <table><tr><th>城池</th><th>区域</th><th>归属</th><th>守军</th><th>城防</th><th>粮食</th><th>金钱</th><th>民心</th></tr>
     ${state.cities.map(ct=>{
-      const owner = ct.owner ? `<span class="faction-dot" style="background:${state.factions[ct.owner].color}"></span>${state.factions[ct.owner].name}` : '无主';
+      const ownerFac = ct.owner ? state.factions[ct.owner] : null;
+      const owner = ownerFac ? `<span class="faction-dot" style="background:${ownerFac.color}"></span>${ownerFac.name}` : '无主';
       return `<tr><td>${ct.name}</td><td>${ct.region}</td><td>${owner}</td><td>${Math.floor(ct.troops)}</td><td>${ct.defense}</td><td>${ct.food}</td><td>${ct.money}</td><td>${ct.morale}</td></tr>`;
     }).join('')}
     </table></div>

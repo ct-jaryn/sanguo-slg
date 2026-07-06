@@ -1,8 +1,9 @@
 import { getState } from '../../core/state.js';
+import { log } from '../../core/log.js';
 import {
-  log, player, relation, setRelation
+  player, relation, setRelation
 } from '../../core/utils.js';
-import { renderAll } from '../renderer.js';
+import { renderAll } from '../common.js';
 
 function renderDiplomacy(c) {
   const state = getState();
@@ -30,6 +31,7 @@ function doDiplomacy(type,targetId) {
   const state = getState();
   const p = player();
   const f = state.factions[targetId];
+  if (!f || f.eliminated) { log('目标势力不存在或已灭亡'); return; }
   if(type==='ally' && p.gold>=500 && !p.allies.includes(targetId)){
     p.gold-=500; setRelation(state.playerId,targetId,Math.max(relation(state.playerId,targetId),80));
     p.allies.push(targetId); f.allies.push(state.playerId);
