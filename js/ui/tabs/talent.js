@@ -17,12 +17,12 @@ function renderTalent(c) {
   const equippable = state.generals.filter(g => g.faction === state.playerId);
   c.innerHTML = `
     <div class="card"><h3>人才招募</h3>
-    <button class="action" onclick="window.doInternal('search')" ${p.gold < 300 ? 'disabled' : ''}>寻访人才 (300金)</button>
-    <button class="action" onclick="window.openEquipShop()" ${p.gold < 500 ? 'disabled' : ''}>装备商店 (500金)</button>
+    <button class="action" onclick="appActions.doInternal('search')" ${p.gold < 300 ? 'disabled' : ''}>寻访人才 (300金)</button>
+    <button class="action" onclick="appActions.openEquipShop()" ${p.gold < 500 ? 'disabled' : ''}>装备商店 (500金)</button>
     <p>在野武将可通过寻访加入。敌方忠诚度低于30的武将可招降。武将战斗可获得经验升级。</p>
     </div>
     <div class="card"><h3>可招降武将</h3>
-    ${enemyGens.length ? enemyGens.map(g => `<div style="margin:4px 0">${g.name} (${state.factions[g.faction]?.name || '未知'}) 忠诚${g.loyalty} <button class="action" onclick="window.recruitGeneral('${g.name}')" ${p.gold < 500 ? 'disabled' : ''}>招降 (500金)</button></div>`).join('') : '<p>当前没有可招降武将</p>'}
+    ${enemyGens.length ? enemyGens.map(g => `<div style="margin:4px 0">${g.name} (${state.factions[g.faction]?.name || '未知'}) 忠诚${g.loyalty} <button class="action" onclick="appActions.recruitGeneral('${g.name}')" ${p.gold < 500 ? 'disabled' : ''}>招降 (500金)</button></div>`).join('') : '<p>当前没有可招降武将</p>'}
     </div>
     <div class="card"><h3>武将羁绊</h3>
     <p>将羁绊武将编入同一军团可触发组合技加成。</p>
@@ -59,7 +59,7 @@ function renderTalent(c) {
     <div style="margin:8px 0">
       <label>武将：</label><select id="equip-gen">${equippable.map(g => `<option value="${g.name}">${g.name}</option>`).join('')}</select>
       <label> 装备：</label><select id="equip-item"><option value="">卸下全部</option>${state.equipmentPool.filter(it => it.owned).map(it => `<option value="${it.name}">${it.name} (${EQUIPMENT_TYPES[it.type].name})</option>`).join('')}</select>
-      <button class="action" onclick="window.equipItem()">穿戴/卸下</button>
+      <button class="action" onclick="appActions.equipItem()">穿戴/卸下</button>
     </div>
     <p style="font-size:0.8rem;color:var(--muted)">装备可在战斗胜利、事件奖励或装备商店中获得。</p>
     </div>`;
@@ -81,10 +81,10 @@ function openEquipShop() {
       const attr = ['force', 'intelligence', 'command', 'politics'].filter(k => it[k]).map(k => `${k === 'force' ? '武' : k === 'intelligence' ? '智' : k === 'command' ? '统' : '政'}+${it[k]}`).join(' ');
       return `<div style="margin:8px 0;padding:8px;border:1px solid var(--border);border-radius:4px">
         <b>${it.name}</b> [${EQUIPMENT_TYPES[it.type].name}] ${attr} · ${it.cost}金
-        <button class="action" onclick="window.buyEquip('${it.name}')" ${p.gold < it.cost ? 'disabled' : ''}>购买</button>
+        <button class="action" onclick="appActions.buyEquip('${it.name}')" ${p.gold < it.cost ? 'disabled' : ''}>购买</button>
       </div>`;
     }).join('') : '<p>当前没有可售装备。</p>'}
-    <div style="margin-top:12px"><button class="action" onclick="window.closeModal()">关闭</button></div>`;
+    <div style="margin-top:12px"><button class="action" onclick="appActions.closeModal()">关闭</button></div>`;
 }
 
 function buyEquip(name) {

@@ -21,7 +21,7 @@ function renderMilitary(c) {
 
   let html = `<div class="card"><h3>军团管理</h3>`;
   html += `<p>可用兵力：${Math.floor(p.troops)} · 可用武将：${availableGens.length}人 · 军团上限：${pcities.length}</p>`;
-  html += `<button class="action" onclick="window.openArmyEditor()">组建新军团</button>`;
+  html += `<button class="action" onclick="appActions.openArmyEditor()">组建新军团</button>`;
   html += `</div>`;
 
   html += `<div class="card"><h3>我的军团</h3>`;
@@ -41,8 +41,8 @@ function renderMilitary(c) {
         <td>${a.infantry}</td><td>${a.cavalry}</td><td>${a.archer}</td>
         <td>${armyTroopTotal(a)}</td>
         <td>
-          <button class="action" onclick="window.openArmyEditor(${a.id})">调整</button>
-          <button class="action" onclick="window.disbandArmy(${a.id})">解散</button>
+          <button class="action" onclick="appActions.openArmyEditor(${a.id})">调整</button>
+          <button class="action" onclick="appActions.disbandArmy(${a.id})">解散</button>
         </td>
       </tr>`;
     });
@@ -63,10 +63,10 @@ function renderMilitary(c) {
     }).join('') : '';
     const toOptions = neighborOpts || '<option value="">无相邻目标</option>';
     html += `<div style="margin:8px 0">
-      <label>军团：</label><select id="atk-army" onchange="window.updateAtkTargets()">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
+      <label>军团：</label><select id="atk-army" onchange="appActions.updateAtkTargets()">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
       <label> 目标城：</label><select id="atk-to">${toOptions}</select>
       <label> 战术：</label><select id="atk-tactic">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
-      <button class="action" onclick="window.doArmyAttack()">出征</button>
+      <button class="action" onclick="appActions.doArmyAttack()">出征</button>
     </div>`;
     html += `<div id="tactic-desc" style="font-size:0.85rem;color:var(--muted)"></div>`;
     html += `<div id="atk-preview"></div>`;
@@ -81,8 +81,8 @@ function renderMilitary(c) {
     html += `<div style="margin:8px 0">
       <label>城池：</label><select id="gar-city">${pcities.map(c=>`<option value="${c.name}">${c.name} (守军${Math.floor(c.troops)})</option>`).join('')}</select>
       <label> 数量：</label><input type="number" id="gar-num" value="500" min="100" step="100" style="width:90px">
-      <button class="action" onclick="window.reinforceCity('in')">从预备役调兵驻防</button>
-      <button class="action" onclick="window.reinforceCity('out')">撤回预备役</button>
+      <button class="action" onclick="appActions.reinforceCity('in')">从预备役调兵驻防</button>
+      <button class="action" onclick="appActions.reinforceCity('out')">撤回预备役</button>
     </div>`;
   }
   html += `</div>`;
@@ -92,8 +92,8 @@ function renderMilitary(c) {
   const armySel = document.getElementById('atk-army');
   const toSel = document.getElementById('atk-to');
   if (armySel && toSel) {
-    armySel.addEventListener('change', window.updateAtkTargets);
-    window.updateAtkTargets();
+    armySel.addEventListener('change', appActions.updateAtkTargets);
+    appActions.updateAtkTargets();
     const tacticSel = document.getElementById('atk-tactic');
     const tacticDesc = document.getElementById('tactic-desc');
     if (tacticSel && tacticDesc) {
@@ -225,8 +225,8 @@ function openArmyEditor(armyId=null) {
     <div style="margin:8px 0"><label>骑兵：</label><input type="number" id="army-cavalry" value="${army?army.cavalry:0}" min="0" step="100" style="width:80px"></div>
     <div style="margin:8px 0"><label>弓兵：</label><input type="number" id="army-archer" value="${army?army.archer:0}" min="0" step="100" style="width:80px"></div>
     <p>可用兵力：${Math.floor(p.troops)} · 预计消耗：步兵1粮/百、骑兵1.5粮/百、弓兵1.1粮/百（按季节结算）</p>
-    <div style="margin-top:12px"><button class="action" onclick="window.saveArmy(${armyId||'null'})" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">保存</button>
-    <button class="action" onclick="window.closeModal()">取消</button></div>
+    <div style="margin-top:12px"><button class="action" onclick="appActions.saveArmy(${armyId||'null'})" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">保存</button>
+    <button class="action" onclick="appActions.closeModal()">取消</button></div>
   `;
 }
 

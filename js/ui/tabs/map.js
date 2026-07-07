@@ -29,7 +29,7 @@ function renderMap(c) {
   const nodesHtml = state.cities.map(ct => {
     const owner = ct.owner ? state.factions[ct.owner] : null;
     const ownerMark = owner ? ` [${owner.name.charAt(0)}]` : '';
-    return `<div class="map-node" data-city="${ct.name}" style="left:${mapX(ct.x)}%;top:${mapY(ct.y)}%" onclick="window.switchTab('military')" title="${ct.name} 守军${Math.floor(ct.troops)}">
+    return `<div class="map-node" data-city="${ct.name}" style="left:${mapX(ct.x)}%;top:${mapY(ct.y)}%" onclick="appActions.switchTab('military')" title="${ct.name} 守军${Math.floor(ct.troops)}">
       <span class="n-name">${ct.name}${ownerMark}</span>
       <span class="n-troops">守:${Math.floor(ct.troops)} 民:${ct.morale}</span>
     </div>`;

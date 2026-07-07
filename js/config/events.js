@@ -1,4 +1,4 @@
-import { getState } from '../core/state.js';
+import { getState, DEFAULT_TECH } from '../core/state.js';
 import {
   availableGenerals, factionCities, findCity, getSeason,
   relation, setRelation, player
@@ -46,9 +46,10 @@ const EVENTS = [
     choices:[
       {label:'厚礼相待（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{
         ctx.faction.gold-=300;
+        if (!ctx.faction.tech) ctx.faction.tech = JSON.parse(JSON.stringify(DEFAULT_TECH));
         const branch = ['farm','comm','military'][Math.floor(Math.random()*3)];
         const key = branch==='farm'?'farmBonus':branch==='comm'?'commBonus':'recruitBonus';
-        ctx.state.tech[branch][key] += (branch==='military'?20:10);
+        ctx.faction.tech[branch][key] += (branch==='military'?20:10);
         return `隐士献计，${branch==='farm'?'农业':branch==='comm'?'商业':'募兵'}科技提升。`;
       }},
       {label:'驱逐', effect:(ctx)=>'你赶走了这个来历不明的人。'}

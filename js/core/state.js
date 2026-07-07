@@ -4,11 +4,19 @@ import { makeFactions } from '../data/factions.js';
 import { EQUIPMENT_POOL } from '../config/equipment.js';
 import { log, setLogState } from './log.js';
 
+const DEFAULT_TECH = {
+  farm: { level: 0, max: 5, farmBonus: 0 },
+  comm: { level: 0, max: 5, commBonus: 0 },
+  military: { level: 0, max: 5, recruitBonus: 0, atkBonus: 0 },
+  fort: { level: 0, max: 5, defBonus: 0 }
+};
+
 let state;
 let selectedTab = 'internal';
 
 function initState() {
   const factions = makeFactions();
+  Object.values(factions).forEach(f => { f.tech = JSON.parse(JSON.stringify(DEFAULT_TECH)); });
   const cities = makeCities();
   const generals = makeGenerals();
   const relations = {};
@@ -22,12 +30,6 @@ function initState() {
     logs: [],
     gameOver: false,
     winner: null,
-    tech: {
-      farm: { level: 0, max: 5, farmBonus: 0 },
-      comm: { level: 0, max: 5, commBonus: 0 },
-      military: { level: 0, max: 5, recruitBonus: 0, atkBonus: 0 },
-      fort: { level: 0, max: 5, defBonus: 0 }
-    },
     policy: null,
     eventsTriggered: {},
     pendingEvents: [],
@@ -55,4 +57,4 @@ function setState(newState) { state = newState; }
 function getSelectedTab() { return selectedTab; }
 function setSelectedTab(tab) { selectedTab = tab; }
 
-export { getState, setState, getSelectedTab, setSelectedTab, initState };
+export { getState, setState, getSelectedTab, setSelectedTab, initState, DEFAULT_TECH };

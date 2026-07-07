@@ -59,7 +59,7 @@ function renderEvents(c) {
           const cond = getChoiceCondition(evt, ch);
           if (cond) ok = !!cond(ctx);
         } catch (e) { ok = false; }
-        html += `<button class="action" onclick="window.resolvePlayerEvent(${evt.id},${ch.idx})" ${ok?'':'disabled'}>${ch.label}</button>`;
+        html += `<button class="action" onclick="appActions.resolvePlayerEvent(${evt.id},${ch.idx})" ${ok?'':'disabled'}>${ch.label}</button>`;
       });
       html += `</div></div>`;
     });

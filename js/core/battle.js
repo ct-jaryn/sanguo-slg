@@ -105,18 +105,21 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) attack *= 1.25;
 
   // 军事科技攻击加成
-  attack *= (1 + getState().tech.military.atkBonus / 100);
+  attack *= (1 + (atkFaction?.tech?.military?.atkBonus || 0) / 100);
 
   // 兵种克制
   const atkShare = { infantry: army.infantry/total, cavalry: army.cavalry/total, archer: army.archer/total };
   const defComp = cityDefenseComp(targetCity);
   attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
 
+  const defFaction = targetCity.owner ? getState().factions[targetCity.owner] : null;
+  const fortBonus = defFaction?.tech?.fort?.defBonus || 0;
+
   const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
   const defStats = effectiveStats(defGeneral);
   if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
 
-  let defense = targetCity.troops * 1.2 * (targetCity.defense + getState().tech.fort.defBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+  let defense = targetCity.troops * 1.2 * (targetCity.defense + fortBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
   defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
   if(defGeneral) defense *= (0.5 + defStats.command/200);
   if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);

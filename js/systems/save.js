@@ -1,40 +1,10 @@
-import { getState, setState } from '../core/state.js';
+import { getState, setState, DEFAULT_TECH } from '../core/state.js';
 import { log, setLogState } from '../core/log.js';
-import { player, factionCities, factionArmies, armyTroopTotal } from '../core/utils.js';
 import { SAVE_VERSION, DIFFICULTY } from '../config/constants.js';
 import { EQUIPMENT_POOL } from '../config/equipment.js';
 
 const LOCAL_SAVE_KEY = 'sanguo_slg_save';
 const LOCAL_AUTOSAVE_KEY = 'sanguo_slg_autosave';
-
-function checkEliminations() {
-  Object.values(getState().factions).forEach(f => {
-    if (f.eliminated || f.id === getState().playerId) return;
-    if (factionCities(f.id).length === 0) {
-      // 失去所有城池即灭亡：残余军团兵力归零并清理，避免幽灵军团卡住武将
-      getState().armies = getState().armies.filter(a => a.faction !== f.id);
-      f.eliminated = true;
-      f.ai = false;
-      f.troops = 0;
-      // 从所有势力的盟友列表中移除
-      Object.values(getState().factions).forEach(o => { o.allies = o.allies.filter(a => a !== f.id); });
-      log(`${f.name} 势力已彻底灭亡，退出群雄之争。`);
-    }
-  });
-}
-
-function checkVictory() {
-  const p = player();
-  const total = getState().cities.length;
-  const mine = factionCities(getState().playerId).length;
-  if (mine >= Math.ceil(total * 0.85)) { getState().gameOver = true; getState().winner = getState().playerId; getState().endingTitle = '统一天下：你赢得了胜利！'; log(getState().endingTitle); return; }
-  // 灭亡判定：无城池且无可作战军团（含预备役+军团兵力）才判负
-  const armyTotal = factionArmies(getState().playerId).reduce((s, a) => s + armyTroopTotal(a), 0);
-  const allForces = p.troops + factionCities(getState().playerId).reduce((s, c) => s + c.troops, 0) + armyTotal;
-  if ((mine === 0 && armyTotal === 0) || (mine === 0 && p.food <= 0 && p.gold <= 0 && allForces <= 0)) {
-    getState().gameOver = true; getState().winner = null; getState().endingTitle = '你的势力覆灭了。'; log(getState().endingTitle);
-  }
-}
 
 function saveAuto() {
   try {
@@ -148,7 +118,7 @@ function showExportModal(combined, headerJson, filename) {
     <p class="hint">文件 ${filename} 已自动下载，也可复制下方内容保存：</p>
     <textarea class="save-code-box" readonly onclick="this.select()">${combined}</textarea>
     <div style="margin-top:12px">
-      <button class="action" onclick="window.closeModal()">关闭</button>
+      <button class="action" onclick="appActions.closeModal()">关闭</button>
     </div>`;
   modal.style.display = 'flex';
 }
@@ -204,6 +174,16 @@ function deserializeState(data) {
       fort: { level: 0, max: 5, defBonus: 0 }
     };
   }
+  // 迁移全局科技到玩家势力，并确保每个势力都有独立科技副本
+  const playerHadTech = !!(state.factions[state.playerId] && state.factions[state.playerId].tech);
+  Object.values(state.factions).forEach(f => {
+    if (!f.tech) f.tech = JSON.parse(JSON.stringify(state.tech || DEFAULT_TECH));
+  });
+  if (state.tech && state.factions[state.playerId] && !playerHadTech) {
+    state.factions[state.playerId].tech = JSON.parse(JSON.stringify(state.tech));
+  }
+  // 全局科技仅作为回退模板保留，不再参与游戏逻辑
+  state.tech = JSON.parse(JSON.stringify(DEFAULT_TECH));
   if (!state.policy) state.policy = null;
   if (!state.eventsTriggered) state.eventsTriggered = {};
   if (!Array.isArray(state.pendingEvents)) state.pendingEvents = [];
@@ -258,7 +238,7 @@ function deserializeState(data) {
 }
 
 export {
-  checkEliminations, checkVictory, saveAuto, serializeState, deserializeState,
+  saveAuto, serializeState, deserializeState,
   xorEncrypt, downloadText, showExportModal,
   saveGame, exportEncryptedSave, importEncryptedSave, promptImportSave, loadGame
 };

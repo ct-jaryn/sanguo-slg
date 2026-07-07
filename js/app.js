@@ -1,6 +1,6 @@
 import { initState, getState } from './core/state.js';
-import { log } from './core/log.js';
 import { renderAll } from './ui/renderer.js';
+import { log } from './core/log.js';
 import { closeModal, switchTab } from './ui/common.js';
 import {
   showTutorialStep, nextTutorialStep, prevTutorialStep, skipTutorial, closeTutorial
@@ -27,53 +27,57 @@ function initGame() {
   initState();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  // 绑定所有需要在 HTML onclick 中使用的函数到 window
-  window.initGame = initGame;
-  window.switchTab = switchTab;
-  window.closeModal = closeModal;
+const appActions = {
+  getState,
+  initGame,
+  switchTab,
+  closeModal,
 
-  window.closeTutorial = closeTutorial;
-  window.showTutorial = showTutorialStep;
-  window.showTutorialStep = showTutorialStep;
-  window.nextTutorialStep = nextTutorialStep;
-  window.prevTutorialStep = prevTutorialStep;
-  window.skipTutorial = skipTutorial;
+  closeTutorial,
+  showTutorial: showTutorialStep,
+  showTutorialStep,
+  nextTutorialStep,
+  prevTutorialStep,
+  skipTutorial,
 
-  window.doInternal = doInternal;
-  window.setDifficulty = setDifficulty;
-  window.setPolicy = setPolicy;
+  doInternal,
+  setDifficulty,
+  setPolicy,
 
-  window.updateAtkTargets = updateAtkTargets;
-  window.reinforceCity = reinforceCity;
-  window.doArmyAttack = doArmyAttack;
-  window.openArmyEditor = openArmyEditor;
-  window.saveArmy = saveArmy;
-  window.disbandArmy = disbandArmy;
+  updateAtkTargets,
+  reinforceCity,
+  doArmyAttack,
+  openArmyEditor,
+  saveArmy,
+  disbandArmy,
 
-  window.openEquipShop = openEquipShop;
-  window.buyEquip = buyEquip;
-  window.equipItem = equipItem;
-  window.recruitGeneral = recruitGeneral;
+  openEquipShop,
+  buyEquip,
+  equipItem,
+  recruitGeneral,
 
-  window.doDiplomacy = doDiplomacy;
+  doDiplomacy,
 
-  window.dismissTip = dismissTip;
-  window.resolvePlayerEvent = resolvePlayerEvent;
+  dismissTip,
+  resolvePlayerEvent,
 
-  window.saveGame = saveGame;
-  window.exportEncryptedSave = exportEncryptedSave;
-  window.importEncryptedSave = (input) => { if (importEncryptedSave(input)) renderAll(); };
-  window.promptImportSave = promptImportSave;
-  window.loadGame = () => {
+  saveGame,
+  exportEncryptedSave,
+  importEncryptedSave: (input) => { if (importEncryptedSave(input)) renderAll(); },
+  promptImportSave,
+  loadGame: () => {
     if (loadGame()) {
       if (getState().tutorial) setTimeout(() => { showTutorialStep(); }, 100);
       renderAll();
     }
-  };
+  },
 
-  window.nextTurn = () => { nextTurn(); renderAll(); };
+  nextTurn: () => { nextTurn(); renderAll(); }
+};
 
+window.appActions = appActions;
+
+window.addEventListener('DOMContentLoaded', () => {
   window.onerror = (msg, source, line, col, err) => {
     log('系统错误：' + msg);
     if (err) console.error(err);

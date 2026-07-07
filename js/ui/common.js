@@ -50,14 +50,14 @@ function renderSidebar() {
   sb.innerHTML = tabs.map(t=>{
     let badge = '';
     if(t.id==='events' && pendingCount>0) badge = ` <span style="background:var(--accent-red);color:#fff;border-radius:50%;padding:2px 6px;font-size:0.7rem">${pendingCount}</span>`;
-    return `<button class="${selectedTab===t.id?'active':''}" onclick="window.switchTab('${t.id}')">${t.label}${badge}</button>`;
+    return `<button class="${selectedTab===t.id?'active':''}" onclick="appActions.switchTab('${t.id}')">${t.label}${badge}</button>`;
   }).join('') +
     `<hr style="width:100%;border-color:var(--border)">` +
-    `<button onclick="window.saveGame()">保存游戏</button>` +
-    `<button onclick="window.exportEncryptedSave()">导出加密存档</button>` +
-    `<button onclick="window.promptImportSave()">导入加密存档</button>` +
-    `<button onclick="window.loadGame()">读取游戏</button>` +
-    `<button onclick="window.nextTurn()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">结束回合</button>`;
+    `<button onclick="appActions.saveGame()">保存游戏</button>` +
+    `<button onclick="appActions.exportEncryptedSave()">导出加密存档</button>` +
+    `<button onclick="appActions.promptImportSave()">导入加密存档</button>` +
+    `<button onclick="appActions.loadGame()">读取游戏</button>` +
+    `<button onclick="appActions.nextTurn()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">结束回合</button>`;
 }
 
 function switchTab(id) {
@@ -98,7 +98,7 @@ function showBattleReport(r) {
     ${r.bonds && r.bonds.length ? `<div style="margin:8px 0"><b>羁绊触发：</b>${r.bonds.join('、')}</div>` : ''}
     ${r.reward ? `<div style="margin:8px 0">获得金钱：<b>${r.reward}</b></div>` : ''}
     ${r.equipment ? `<div style="margin:8px 0">缴获装备：<b>${r.equipment}</b></div>` : ''}
-    <div style="margin-top:12px"><button class="action" onclick="window.closeModal()">关闭</button></div>`;
+    <div style="margin-top:12px"><button class="action" onclick="appActions.closeModal()">关闭</button></div>`;
   modal.style.display = 'flex';
 }
 

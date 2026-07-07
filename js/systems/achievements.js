@@ -17,7 +17,10 @@ const ACHIEVEMENTS = [
     return alive.length > 0 && alive.every(f => p.allies.includes(f.id));
   }},
   { id: 'unifier', name: '天下归心', desc: '统一天下', check: () => getState().winner === getState().playerId },
-  { id: 'scholar', name: '科技强国', desc: '所有科技达到满级', check: () => Object.values(getState().tech).every(t => t.level >= t.max) }
+  { id: 'scholar', name: '科技强国', desc: '所有科技达到满级', check: () => {
+    const pt = player().tech;
+    return pt && Object.values(pt).every(t => t.level >= t.max);
+  }}
 ];
 
 function initStats() {

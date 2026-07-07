@@ -17,13 +17,13 @@ function renderContent() {
   const selectedTab = getSelectedTab();
   if(state.gameOver) {
     const msg = state.endingTitle || (state.winner===state.playerId ? '恭喜统一天下！' : (state.winner ? `${state.factions[state.winner] ? state.factions[state.winner].name : state.winner} 一统天下，你失败了。` : '你的势力覆灭了。'));
-    c.innerHTML = `<div class="card"><h2>${msg}</h2><button class="action" onclick="window.initGame()">重新开始</button></div>`;
+    c.innerHTML = `<div class="card"><h2>${msg}</h2><button class="action" onclick="appActions.initGame()">重新开始</button></div>`;
     return;
   }
   const tip = tabTip(selectedTab);
   let topHtml = `<div class="goal-bar">${currentGoal()}</div>`;
   if (tip && !state.shownTips[selectedTab]) {
-    topHtml += `<div class="tip-bar"><b>新手提示：</b>${tip} <a href="#" onclick="window.dismissTip('${selectedTab}');return false;" style="color:var(--accent-red)">[知道了]</a></div>`;
+    topHtml += `<div class="tip-bar"><b>新手提示：</b>${tip} <a href="#" onclick="appActions.dismissTip('${selectedTab}');return false;" style="color:var(--accent-red)">[知道了]</a></div>`;
   }
   const contentDiv = document.createElement('div');
   switch(selectedTab){

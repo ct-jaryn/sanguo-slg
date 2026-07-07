@@ -86,9 +86,9 @@ function aiTurn(f) {
   if (f.gold > 800 && Math.random() < diff.aiTechChance) {
     const preferred = f.personality === 'expansion' ? 'military' : (f.personality === 'diplomatic' ? 'comm' : 'farm');
     const techOptions = ['farm', 'comm', 'military', 'fort'];
-    const preferredInfo = st.tech[preferred];
-    const tech = preferredInfo && preferredInfo.level < preferredInfo.max ? preferred : techOptions.find(k => st.tech[k] && st.tech[k].level < st.tech[k].max);
-    const techInfo = tech ? st.tech[tech] : null;
+    const preferredInfo = f.tech[preferred];
+    const tech = preferredInfo && preferredInfo.level < preferredInfo.max ? preferred : techOptions.find(k => f.tech[k] && f.tech[k].level < f.tech[k].max);
+    const techInfo = tech ? f.tech[tech] : null;
     if (techInfo) {
       f.gold -= 500;
       techInfo.level++;

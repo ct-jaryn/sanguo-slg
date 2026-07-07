@@ -40,9 +40,9 @@ function showTutorialStep() {
     <h2>${step.title}</h2>
     <p>${step.msg}</p>
     <div style="margin-top:16px">
-      ${idx > 0 ? '<button class="action" onclick="window.prevTutorialStep()">上一步</button>' : ''}
-      <button class="action" onclick="window.nextTutorialStep()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">${isLast ? '开始征程' : '下一步'}</button>
-      <button class="action" onclick="window.skipTutorial()">跳过</button>
+      ${idx > 0 ? '<button class="action" onclick="appActions.prevTutorialStep()">上一步</button>' : ''}
+      <button class="action" onclick="appActions.nextTutorialStep()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">${isLast ? '开始征程' : '下一步'}</button>
+      <button class="action" onclick="appActions.skipTutorial()">跳过</button>
     </div>
     <div style="margin-top:8px;font-size:0.8rem;color:var(--muted)">步骤 ${idx + 1} / ${TUTORIAL_STEPS.length}</div>`;
   overlay.style.display = 'flex';
@@ -50,7 +50,7 @@ function showTutorialStep() {
 
 function nextTutorialStep() {
   const next = (getState().tutorialStep || 0) + 1;
-  if (next >= TUTORIAL_STEPS.length) window.closeTutorial();
+  if (next >= TUTORIAL_STEPS.length) appActions.closeTutorial();
   else { getState().tutorialStep = next; showTutorialStep(); }
 }
 
