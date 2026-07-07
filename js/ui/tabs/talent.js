@@ -4,7 +4,7 @@ import {
   player, factionGenerals, factionArmies, findGeneral, effectiveStats,
   removeGeneralFromArmies, generalExpToLevelUp
 } from '../../core/utils.js';
-import { EQUIPMENT_POOL, EQUIPMENT_TYPES } from '../../config/equipment.js';
+import { EQUIPMENT_TYPES } from '../../config/equipment.js';
 import { BONDS } from '../../config/bonds.js';
 import { SKILL_NAMES } from '../../config/skills.js';
 import { renderAll, closeModal } from '../common.js';
@@ -22,7 +22,7 @@ function renderTalent(c) {
     <p>在野武将可通过寻访加入。敌方忠诚度低于30的武将可招降。武将战斗可获得经验升级。</p>
     </div>
     <div class="card"><h3>可招降武将</h3>
-    ${enemyGens.length ? enemyGens.map(g => `<div style="margin:4px 0">${g.name} (${state.factions[g.faction].name}) 忠诚${g.loyalty} <button class="action" onclick="window.recruitGeneral('${g.name}')" ${p.gold < 500 ? 'disabled' : ''}>招降 (500金)</button></div>`).join('') : '<p>当前没有可招降武将</p>'}
+    ${enemyGens.length ? enemyGens.map(g => `<div style="margin:4px 0">${g.name} (${state.factions[g.faction]?.name || '未知'}) 忠诚${g.loyalty} <button class="action" onclick="window.recruitGeneral('${g.name}')" ${p.gold < 500 ? 'disabled' : ''}>招降 (500金)</button></div>`).join('') : '<p>当前没有可招降武将</p>'}
     </div>
     <div class="card"><h3>武将羁绊</h3>
     <p>将羁绊武将编入同一军团可触发组合技加成。</p>
@@ -58,7 +58,7 @@ function renderTalent(c) {
     <p>为武将穿戴或卸下装备。装备效果计入有效属性。</p>
     <div style="margin:8px 0">
       <label>武将：</label><select id="equip-gen">${equippable.map(g => `<option value="${g.name}">${g.name}</option>`).join('')}</select>
-      <label> 装备：</label><select id="equip-item"><option value="">卸下全部</option>${EQUIPMENT_POOL.filter(it => it.owned).map(it => `<option value="${it.name}">${it.name} (${EQUIPMENT_TYPES[it.type].name})</option>`).join('')}</select>
+      <label> 装备：</label><select id="equip-item"><option value="">卸下全部</option>${state.equipmentPool.filter(it => it.owned).map(it => `<option value="${it.name}">${it.name} (${EQUIPMENT_TYPES[it.type].name})</option>`).join('')}</select>
       <button class="action" onclick="window.equipItem()">穿戴/卸下</button>
     </div>
     <p style="font-size:0.8rem;color:var(--muted)">装备可在战斗胜利、事件奖励或装备商店中获得。</p>
@@ -66,9 +66,10 @@ function renderTalent(c) {
 }
 
 function openEquipShop() {
+  const state = getState();
   const p = player();
   if (p.gold < 500) return;
-  const items = EQUIPMENT_POOL.filter(it => !it.owned).sort(() => Math.random() - 0.5).slice(0, 4);
+  const items = state.equipmentPool.filter(it => !it.owned).sort(() => Math.random() - 0.5).slice(0, 4);
   const modal = document.getElementById('modal');
   const content = document.getElementById('modal-content');
   if (!modal || !content) return;
@@ -87,8 +88,9 @@ function openEquipShop() {
 }
 
 function buyEquip(name) {
+  const state = getState();
   const p = player();
-  const item = EQUIPMENT_POOL.find(it => it.name === name);
+  const item = state.equipmentPool.find(it => it.name === name);
   if (!item || item.owned || p.gold < item.cost) return;
   p.gold -= item.cost;
   item.owned = true;
@@ -111,7 +113,7 @@ function equipItem() {
     });
     log(`${g.name} 卸下全部装备`);
   } else {
-    const item = EQUIPMENT_POOL.find(it => it.name === itemName);
+    const item = state.equipmentPool.find(it => it.name === itemName);
     if (!item || !item.owned) return;
     // 如果其他武将装备了该物品，先卸下
     state.generals.forEach(gg => {

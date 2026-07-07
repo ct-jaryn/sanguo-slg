@@ -11,7 +11,6 @@ import {
 import { BONDS } from '../config/bonds.js';
 import { TACTICS } from '../config/tactics.js';
 import { SKILLS } from '../config/skills.js';
-import { EQUIPMENT_POOL } from '../config/equipment.js';
 
 
 function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal') {
@@ -121,7 +120,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
   if(defGeneral) defense *= (0.5 + defStats.command/200);
   if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
-  if(getState().eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && getState().factions.sun.allies.includes('liu')) attack*=0.7;
+  if(getState().eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && getState().factions.sun?.allies?.includes('liu')) attack*=0.7;
 
   const originalDefTroops = targetCity.troops;
   const victory = attack > defense;
@@ -198,76 +197,6 @@ function applyArmyLosses(army, total, losses) {
   army.archer = Math.floor(army.archer * ratio);
 }
 
-function battle(attackerId, defenderId, general, atkTroops, targetCity, troopTypeKey) {
-  const playerInvolved = attackerId === getState().playerId || defenderId === getState().playerId;
-  const atkFaction = getState().factions[attackerId];
-  const troopType = TROOP_TYPES[troopTypeKey];
-  const defTroops = targetCity.troops;
-  const stats = effectiveStats(general);
-  let aMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
-  let dMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
-  if(general && general.skill && SKILLS[general.skill] && typeof SKILLS[general.skill].battle === 'function') SKILLS[general.skill].battle(aMods,dMods);
-  // 兵种特技
-  if (troopTypeKey === 'cavalry') aMods.atkMul *= 1.15;
-  if (troopTypeKey === 'archer' && targetCity.troops > 1500) aMods.atkMul *= 1.1;
-  const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
-  const defStats = effectiveStats(defGeneral);
-  if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
-  let attack = atkTroops * (0.5 + stats.force/200 * aMods.forceMul) * (0.5 + stats.command/200) * troopType.atk * aMods.atkMul;
-  attack *= (1 + getState().tech.military.atkBonus / 100);
-  if(troopTypeKey==='archer') attack *= troopType.siegeAtk;
-  const atkShare = { infantry: troopTypeKey==='infantry'?1:0, cavalry: troopTypeKey==='cavalry'?1:0, archer: troopTypeKey==='archer'?1:0 };
-  const defComp = cityDefenseComp(targetCity);
-  attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
-  let defense = targetCity.troops * 1.2 * (targetCity.defense + getState().tech.fort.defBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
-  defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
-  if(defGeneral) defense *= (0.5 + defStats.command/200);
-  if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
-  if(getState().eventsTriggered.chibi && attackerId==='cao' && (targetCity.name==='荆州'||targetCity.name==='扬州') && getState().factions.sun.allies.includes('liu')) attack*=0.7;
-
-  atkFaction.troops -= atkTroops;
-  let victory = attack > defense;
-  if (victory) {
-    getState().stats.wins++;
-    getState().stats.battles++;
-    const losses = Math.floor(atkTroops * 0.25);
-    const survivors = atkTroops - losses;
-    const garrison = Math.floor(survivors / 2);
-    atkFaction.troops += survivors - garrison;
-    targetCity.troops = garrison;
-    const oldOwner = targetCity.owner;
-    if (oldOwner) getState().stats.generalsDefeated++;
-    disbandArmiesAt(targetCity.name, oldOwner);
-    targetCity.owner = attackerId;
-    targetCity.morale = Math.max(30, targetCity.morale - 20);
-    const reward = 200 * (general && general.skill === 'jianxiong' ? SKILLS.jianxiong.rewardGold : 1);
-    atkFaction.gold += reward;
-    if (general && general.skill === 'huoji') targetCity.troops = Math.floor(targetCity.troops * (1 - SKILLS.huoji.fire));
-    addGeneralExp(general, 25);
-    if (defGeneral) addGeneralExp(defGeneral, 8);
-    const dropped = awardRandomEquipment();
-    if (dropped) log(`缴获装备：${dropped.name}`);
-    log(`${atkFaction.name} 的 ${general.name} 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
-    if (oldOwner && getState().factions[oldOwner]) {
-      const old = getState().factions[oldOwner];
-      if (factionCities(oldOwner).length === 0) log(`${old.name} 势力灭亡！`);
-    }
-  } else {
-    getState().stats.battles++;
-    const losses = Math.floor(atkTroops * 0.4);
-    const survivors = atkTroops - losses;
-    atkFaction.troops += survivors;
-    targetCity.troops = Math.floor(defTroops * 0.85);
-    let woundChance = 0.3 + aMods.woundExtra;
-    if (general && general.skill && SKILLS[general.skill].wound) woundChance *= SKILLS[general.skill].wound;
-    if (Math.random() < woundChance) { general.injured = 1; general.injuredTurns = 1 + Math.floor(Math.random() * 2); log(`${general.name} 受伤，需休养 ${general.injuredTurns} 月`); }
-    addGeneralExp(general, 12);
-    if (defGeneral) addGeneralExp(defGeneral, 15);
-    log(`${atkFaction.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
-  }
-  return { playerInvolved, victory, report: null, fxText: null, sound: null };
-}
-
 function getArmyBondBonus(army) {
   const mods = { forceMul: 1, atkMul: 1, defMul: 1, moraleMul: 1, woundExtra: 0 };
   const active = [];
@@ -312,7 +241,7 @@ function applyTroopTraitMods(army, targetCity, side, mods) {
 }
 
 function awardRandomEquipment() {
-  const pool = EQUIPMENT_POOL.filter(it => !it.owned);
+  const pool = getState().equipmentPool.filter(it => !it.owned);
   if (!pool.length) return null;
   const weights = pool.map(it => it.rarity);
   const total = weights.reduce((a, b) => a + b, 0);
@@ -329,7 +258,7 @@ function awardRandomEquipment() {
 }
 
 export {
-  armyBattle, battle, applyArmyLosses,
+  armyBattle, applyArmyLosses,
   getArmyBondBonus, getFormationMods, applyTroopTraitMods,
   awardRandomEquipment
 };

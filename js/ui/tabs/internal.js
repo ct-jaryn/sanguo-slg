@@ -12,7 +12,8 @@ function renderInternal(c) {
   const p = player();
   const season = getSeason();
   const tech = state.tech;
-  const policyName = state.policy ? POLICIES[state.policy].name : '无';
+  const activePolicy = p.policy || state.policy;
+  const policyName = activePolicy ? POLICIES[activePolicy].name : '无';
   c.innerHTML = `
     <div class="card"><h3>内政中心 · 当前季节：${season}</h3>
     <p>拥有城池：${factionCities(state.playerId).length}座 · 武将：${factionGenerals(state.playerId).length}人 · 当前政策：${policyName}</p>
@@ -33,7 +34,7 @@ function renderInternal(c) {
     </div></div>
     <div class="card"><h3>政策法令</h3>
     <p>每项政策持续生效，切换政策需花费 300 金。</p>
-    ${Object.values(POLICIES).map(pol=>`<button class="action" onclick="window.setPolicy('${pol.id}')" ${state.policy===pol.id?'style="background:var(--accent-green);color:#fff"':''}${p.gold<300&&state.policy!==pol.id?' disabled':''}>${pol.name}：${pol.desc}</button>`).join('')}
+    ${Object.values(POLICIES).map(pol=>`<button class="action" onclick="window.setPolicy('${pol.id}')" ${activePolicy===pol.id?'style="background:var(--accent-green);color:#fff"':''}${p.gold<300&&activePolicy!==pol.id?' disabled':''}>${pol.name}：${pol.desc}</button>`).join('')}
     </div>
     <div class="card"><h3>游戏难度</h3>
     <p>当前难度：<b>${DIFFICULTY[state.difficulty||'normal'].name}</b> ${state.turn>1?'（已开始游戏，不可更改）':''}</p>
@@ -55,7 +56,7 @@ function doInternal(type) {
   }else if(type==='comm' && p.gold>=200){
     p.gold-=200; cities.forEach(c=>c.money+=12); log('发展商业，各城金钱产出+12');
   }else if(type==='recruit' && p.gold>=150 && p.food>=200){
-    p.gold-=150; p.food-=200; let add = Math.floor(100+Math.random()*101+state.tech.military.recruitBonus); if(state.policy==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
+    p.gold-=150; p.food-=200; let add = Math.floor(100+Math.random()*101+state.tech.military.recruitBonus); if((p.policy || state.policy)==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
   }else if(type==='search' && p.gold>=300){
     p.gold-=300;
     if(Math.random()<0.4){
@@ -101,9 +102,10 @@ function setDifficulty(d) {
 function setPolicy(pid) {
   const state = getState();
   const p = player();
-  if(state.policy===pid) return;
+  const activePolicy = p.policy || state.policy;
+  if(activePolicy===pid) return;
   if(p.gold<300){ log('金钱不足，无法切换政策'); return; }
-  p.gold-=300; state.policy=pid; log(`颁布${POLICIES[pid].name}`);
+  p.gold-=300; p.policy=pid; state.policy=pid; log(`颁布${POLICIES[pid].name}`);
   renderAll();
 }
 

@@ -28,8 +28,12 @@ function checkAchievements() {
   initStats();
   let newlyUnlocked = [];
   if (!getState().achievements) getState().achievements = {};
+  const p = player();
   ACHIEVEMENTS.forEach(ach => {
-    if (!getState().achievements[ach.id] && ach.check()) {
+    if (getState().achievements[ach.id]) return;
+    let ok = false;
+    try { ok = ach.check(); } catch (e) {}
+    if (ok) {
       getState().achievements[ach.id] = { unlockedAt: { year: getState().year, month: getState().month, turn: getState().turn } };
       newlyUnlocked.push(ach);
     }

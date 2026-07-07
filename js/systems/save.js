@@ -1,7 +1,11 @@
 import { getState, setState } from '../core/state.js';
-import { log } from '../core/log.js';
+import { log, setLogState } from '../core/log.js';
 import { player, factionCities, factionArmies, armyTroopTotal } from '../core/utils.js';
 import { SAVE_VERSION, DIFFICULTY } from '../config/constants.js';
+import { EQUIPMENT_POOL } from '../config/equipment.js';
+
+const LOCAL_SAVE_KEY = 'sanguo_slg_save';
+const LOCAL_AUTOSAVE_KEY = 'sanguo_slg_autosave';
 
 function checkEliminations() {
   Object.values(getState().factions).forEach(f => {
@@ -33,12 +37,16 @@ function checkVictory() {
 }
 
 function saveAuto() {
-  try { localStorage.setItem('sanguo_slg_autosave', JSON.stringify(serializeState())); } catch (e) { }
+  try {
+    const data = JSON.stringify({ _version: SAVE_VERSION, state: serializeState() });
+    localStorage.setItem(LOCAL_AUTOSAVE_KEY, data);
+  } catch (e) { log('自动保存失败：' + e.message); }
 }
 
 function saveGame() {
   try {
-    localStorage.setItem('sanguo_slg_save', JSON.stringify(serializeState()));
+    const data = JSON.stringify({ _version: SAVE_VERSION, state: serializeState() });
+    localStorage.setItem(LOCAL_SAVE_KEY, data);
     log('游戏已手动保存。');
   } catch (e) { log('保存失败：' + e.message); }
 }
@@ -48,12 +56,30 @@ function exportEncryptedSave() {
     const payload = JSON.stringify(serializeState());
     const exportedAt = new Date().toISOString();
     const header = JSON.stringify({ v: SAVE_VERSION, exportedAt });
-    const combined = btoa(header) + '|' + xorEncrypt(payload, exportedAt);
+    const combined = utf8ToBase64(header) + '|' + xorEncrypt(payload, exportedAt);
     const filename = `sanguo_save_${exportedAt.replace(/[:.]/g, '-')}.txt`;
     downloadText(combined, filename);
     log(`加密存档已导出：${filename}`);
     showExportModal(combined, header, filename);
   } catch (e) { log('导出失败：' + e.message); }
+}
+
+function utf8ToBase64(str) {
+  try {
+    const bytes = new TextEncoder().encode(str);
+    let binary = '';
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    return btoa(binary);
+  } catch (e) { return btoa(unescape(encodeURIComponent(str))); }
+}
+
+function base64ToUtf8(b64) {
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  } catch (e) { return decodeURIComponent(escape(atob(b64))); }
 }
 
 function importEncryptedSave(input) {
@@ -62,8 +88,8 @@ function importEncryptedSave(input) {
     if (!raw) { log('导入内容为空'); return false; }
     const parts = raw.split('|');
     if (parts.length !== 2) { log('导入格式错误'); return false; }
-    const header = JSON.parse(atob(parts[0]));
-    const decrypted = xorEncrypt(parts[1], header.exportedAt);
+    const header = JSON.parse(base64ToUtf8(parts[0]));
+    const decrypted = xorDecrypt(parts[1], header.exportedAt);
     const data = JSON.parse(decrypted);
     if (header.v !== SAVE_VERSION) { log(`存档版本 ${header.v} 与当前版本 ${SAVE_VERSION} 不匹配`); return false; }
     deserializeState(data);
@@ -78,11 +104,27 @@ function promptImportSave() {
 }
 
 function xorEncrypt(str, key) {
-  let out = '';
-  for (let i = 0; i < str.length; i++) {
-    out += String.fromCharCode(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+  const strBytes = new TextEncoder().encode(str);
+  const keyBytes = new TextEncoder().encode(key);
+  const out = new Uint8Array(strBytes.length);
+  for (let i = 0; i < strBytes.length; i++) {
+    out[i] = strBytes[i] ^ keyBytes[i % keyBytes.length];
   }
-  return btoa(out);
+  let binary = '';
+  out.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+
+function xorDecrypt(b64, key) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const keyBytes = new TextEncoder().encode(key);
+  const out = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    out[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+  }
+  return new TextDecoder().decode(out);
 }
 
 function downloadText(text, filename) {
@@ -113,9 +155,11 @@ function showExportModal(combined, headerJson, filename) {
 
 function loadGame() {
   try {
-    const data = localStorage.getItem('sanguo_slg_save') || localStorage.getItem('sanguo_slg_autosave');
-    if (!data) { log('没有存档。'); return false; }
-    deserializeState(JSON.parse(data));
+    const raw = localStorage.getItem(LOCAL_SAVE_KEY) || localStorage.getItem(LOCAL_AUTOSAVE_KEY);
+    if (!raw) { log('没有存档。'); return false; }
+    const parsed = JSON.parse(raw);
+    const data = parsed._version ? parsed.state : parsed;
+    deserializeState(data);
     log('游戏已读取。');
     return true;
   } catch (e) { log('读档失败：' + e.message); return false; }
@@ -186,6 +230,31 @@ function deserializeState(data) {
   (state.armies || []).forEach(a => {
     if (!a.formation) a.formation = 'yulin';
   });
+  // 兼容旧存档：将全局政策迁移到玩家势力对象
+  if (state.policy && state.factions[state.playerId]) {
+    state.factions[state.playerId].policy = state.policy;
+  }
+  // 兼容旧存档：补齐装备池；读档时重建武将装备引用，避免副本漂移
+  if (!state.equipmentPool) {
+    state.equipmentPool = JSON.parse(JSON.stringify(EQUIPMENT_POOL));
+  }
+  const poolByName = new Map(state.equipmentPool.map(it => [it.name, it]));
+  state.generals.forEach(g => {
+    if (!g.equipment) g.equipment = { weapon: null, armor: null, horse: null };
+    ['weapon', 'armor', 'horse'].forEach(slot => {
+      const old = g.equipment[slot];
+      if (!old) return;
+      const live = poolByName.get(old.name);
+      if (live) {
+        g.equipment[slot] = live;
+        live.owned = false;
+      } else {
+        g.equipment[slot] = null;
+      }
+    });
+  });
+  // 同步日志模块的 state 引用，避免读档后日志写入旧对象
+  setLogState(state);
 }
 
 export {

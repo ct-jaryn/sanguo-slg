@@ -6,7 +6,7 @@ import {
 } from '../core/utils.js';
 import { AI_COMP_PREFS, RIVER_CITIES, DIFFICULTY } from '../config/constants.js';
 import { TACTICS } from '../config/tactics.js';
-import { battle, armyBattle } from '../core/battle.js';
+import { armyBattle } from '../core/battle.js';
 import { checkAchievements } from './achievements.js';
 
 function aiArmyTacticHint(f, city) {
@@ -73,7 +73,7 @@ function chooseAITroopType(general, targetCity) {
 function aiTurn(f) {
   const st = getState();
   const cities = factionCities(f.id);
-  const diff = DIFFICULTY[st.difficulty || 'normal'];
+  const diff = DIFFICULTY[st.difficulty || 'normal'] || DIFFICULTY.normal;
   // AI policy switching
   if (f.gold > 800 && Math.random() < 0.2) {
     const best = chooseAIPolicy(f, cities);
@@ -86,14 +86,16 @@ function aiTurn(f) {
   if (f.gold > 800 && Math.random() < diff.aiTechChance) {
     const preferred = f.personality === 'expansion' ? 'military' : (f.personality === 'diplomatic' ? 'comm' : 'farm');
     const techOptions = ['farm', 'comm', 'military', 'fort'];
-    const tech = st.tech[preferred].level < st.tech[preferred].max ? preferred : techOptions.find(k => st.tech[k].level < st.tech[k].max);
-    if (tech) {
+    const preferredInfo = st.tech[preferred];
+    const tech = preferredInfo && preferredInfo.level < preferredInfo.max ? preferred : techOptions.find(k => st.tech[k] && st.tech[k].level < st.tech[k].max);
+    const techInfo = tech ? st.tech[tech] : null;
+    if (techInfo) {
       f.gold -= 500;
-      st.tech[tech].level++;
-      if (tech === 'farm') st.tech[tech].farmBonus += 10;
-      else if (tech === 'comm') st.tech[tech].commBonus += 8;
-      else if (tech === 'military') { st.tech[tech].recruitBonus += 30; st.tech[tech].atkBonus += 4; }
-      else if (tech === 'fort') { st.tech[tech].defBonus += 0.1; cities.forEach(c => c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2))); }
+      techInfo.level++;
+      if (tech === 'farm') techInfo.farmBonus += 10;
+      else if (tech === 'comm') techInfo.commBonus += 8;
+      else if (tech === 'military') { techInfo.recruitBonus += 30; techInfo.atkBonus += 4; }
+      else if (tech === 'fort') { techInfo.defBonus += 0.1; cities.forEach(c => c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2))); }
     }
   }
   // 民心维护：抵消每回合衰减，避免 AI 城池民心崩到 20
@@ -117,35 +119,6 @@ function aiTurn(f) {
       f.gold-=500; setRelation(f.id,t.id,relation(f.id,t.id)+30);
       f.allies.push(t.id); t.allies.push(f.id);
       log(`${f.name} 与 ${t.name} 结为盟友`);
-    }
-  }
-  // Attack
-  if(f.personality==='expansion' || (f.personality==='diplomatic' && Math.random()<0.3)){
-    const myCities = factionCities(f.id);
-    const targets = [];
-    myCities.forEach(c=>{
-      c.neighbors.forEach(n=>{
-        const t = findCity(n);
-        if(t && t.owner!==f.id && (!t.owner || relation(f.id,t.owner)<80)){
-          targets.push({from:c,to:t});
-        }
-      });
-    });
-    targets.sort((a,b)=>a.to.troops-b.to.troops);
-    const usedGenerals = new Set();
-    for(const atk of targets){
-      if(f.troops>atk.to.troops*(diff.aiAttackThreshold+0.2) && f.troops>500){
-        // 选未受伤且未在本回合出战的武将（排除已在军团中的）
-        const gen = availableGenerals(f.id).filter(g=>!g.injured && !usedGenerals.has(g.name)).sort((a,b)=>b.force-a.force)[0];
-        if(gen){
-          usedGenerals.add(gen.name);
-          const use = Math.min(f.troops, Math.max(500, Math.floor(atk.to.troops*1.2)));
-          const troopType = chooseAITroopType(gen, atk.to);
-          battle(f.id, atk.to.owner||'neutral', gen, use, atk.to, troopType);
-          checkAchievements();
-          if(Math.random()<0.7) break;
-        }
-      }
     }
   }
   // Distribute troops to cities and auto-create armies for AI

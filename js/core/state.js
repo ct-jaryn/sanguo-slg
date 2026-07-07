@@ -1,6 +1,7 @@
 import { makeGenerals } from '../data/generals.js';
 import { makeCities } from '../data/cities.js';
 import { makeFactions } from '../data/factions.js';
+import { EQUIPMENT_POOL } from '../config/equipment.js';
 import { log, setLogState } from './log.js';
 
 let state;
@@ -35,18 +36,18 @@ function initState() {
     yellowTurban: false,
     armies: [],
     nextArmyId: 1,
-    tutorial: !localStorage.getItem('sanguo_slg_tutorial_seen'),
+    tutorial: true,
     tutorialStep: 0,
     difficulty: 'normal',
     shownTips: {},
     achievements: {},
     stats: { wins: 0, battles: 0, generalsDefeated: 0, citiesLost: 0, eventsResolved: 0 },
     eventChains: {},
-    endingTitle: null
+    endingTitle: null,
+    equipmentPool: JSON.parse(JSON.stringify(EQUIPMENT_POOL))
   };
   setLogState(state);
   log('游戏开始！公元190年，乱世群雄并起。');
-  if(state.tutorial) setTimeout(()=>{ window.showTutorialStep(); }, 100);
 }
 
 function getState() { return state; }

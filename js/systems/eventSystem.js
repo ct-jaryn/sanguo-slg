@@ -286,6 +286,7 @@ function autoResolveEvent(evt) {
   const ev = EVENTS.find(e => e.id === evt.defId);
   if (!ev) return;
   const ctx = buildEventContext(evt);
+  if (!ctx) { resolveEvent(evt, '事件上下文无效，已跳过。'); return; }
   let result = '';
   if (ev.type === 'choice' && ev.choices) {
     // AI 选第一个满足条件的选项，否则选最后一个
@@ -305,6 +306,7 @@ function buildEventContext(evt) {
   const faction = getState().factions[evt.factionId];
   const city = findCity(evt.cityName);
   const general = evt.generalName ? findGeneral(evt.generalName) : null;
+  if (!faction || !city) return null;
   return { state: getState(), faction, city, general };
 }
 

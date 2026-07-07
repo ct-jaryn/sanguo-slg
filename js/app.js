@@ -1,4 +1,4 @@
-import { initState } from './core/state.js';
+import { initState, getState } from './core/state.js';
 import { log } from './core/log.js';
 import { renderAll } from './ui/renderer.js';
 import { closeModal, switchTab } from './ui/common.js';
@@ -65,12 +65,25 @@ window.addEventListener('DOMContentLoaded', () => {
   window.exportEncryptedSave = exportEncryptedSave;
   window.importEncryptedSave = (input) => { if (importEncryptedSave(input)) renderAll(); };
   window.promptImportSave = promptImportSave;
-  window.loadGame = () => { if (loadGame()) renderAll(); };
+  window.loadGame = () => {
+    if (loadGame()) {
+      if (getState().tutorial) setTimeout(() => { showTutorialStep(); }, 100);
+      renderAll();
+    }
+  };
 
   window.nextTurn = () => { nextTurn(); renderAll(); };
 
-  window.onerror = (msg) => { log('系统错误：' + msg); return true; };
+  window.onerror = (msg, source, line, col, err) => {
+    log('系统错误：' + msg);
+    if (err) console.error(err);
+    return false;
+  };
 
   initState();
+  try {
+    if (localStorage.getItem('sanguo_slg_tutorial_seen')) getState().tutorial = false;
+  } catch (e) {}
+  if (getState().tutorial) setTimeout(() => { showTutorialStep(); }, 100);
   renderAll();
 });

@@ -10,7 +10,8 @@ function getSeason() {
   if (m >= 9 && m <= 11) return '秋';
   return '冬';
 }
-function player() { return getState().factions[getState().playerId]; }
+const DEFAULT_PLAYER = { id: '', name: '未知', food: 0, gold: 0, troops: 0, morale: 50, allies: [], eliminated: true, policy: null };
+function player() { return getState().factions[getState().playerId] || DEFAULT_PLAYER; }
 function factionCities(fid) { return getState().cities.filter(c=>c.owner===fid); }
 function factionGenerals(fid) { return getState().generals.filter(g=>g.faction===fid); }
 function findCity(name) { return getState().cities.find(c=>c.name===name); }

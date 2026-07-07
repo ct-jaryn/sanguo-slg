@@ -179,7 +179,7 @@ function doArmyAttack() {
   if(target.owner && relation(state.playerId,target.owner)>=80) { alert('不能攻击盟友'); return; }
   const fromCity = army.city ? findCity(army.city) : factionCities(state.playerId)[0];
   if(!fromCity || fromCity.owner!==state.playerId) { alert('军团驻扎城已丢失，请重新驻防'); return; }
-  if(!fromCity.neighbors.includes(target.name)) { alert('目标不相邻'); return; }
+  if(!fromCity.neighbors || !fromCity.neighbors.includes(target.name)) { alert('目标不相邻'); return; }
   if(armyTroopTotal(army)<100) { alert('军团兵力不足'); return; }
   const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
   if(mainGeneral && mainGeneral.injured) { alert('主将受伤中'); return; }

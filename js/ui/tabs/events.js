@@ -33,6 +33,13 @@ function renderAchievements(c) {
     </div></div>`;
 }
 
+function getChoiceCondition(evt, ch) {
+  if (typeof ch.condition === 'function') return ch.condition;
+  const ev = EVENTS.find(e => e.id === evt.defId);
+  const choice = ev && ev.choices ? ev.choices[ch.idx] : null;
+  return choice && typeof choice.condition === 'function' ? choice.condition : null;
+}
+
 function renderEvents(c) {
   const state = getState();
   const pending = state.pendingEvents.filter(e => e.factionId === state.playerId);
@@ -47,7 +54,11 @@ function renderEvents(c) {
         <div>`;
       const ctx = buildEventContext(evt);
       evt.choices.forEach(ch => {
-        const ok = !ch.condition || ch.condition(ctx);
+        let ok = true;
+        try {
+          const cond = getChoiceCondition(evt, ch);
+          if (cond) ok = !!cond(ctx);
+        } catch (e) { ok = false; }
         html += `<button class="action" onclick="window.resolvePlayerEvent(${evt.id},${ch.idx})" ${ok?'':'disabled'}>${ch.label}</button>`;
       });
       html += `</div></div>`;
@@ -83,6 +94,9 @@ function resolvePlayerEvent(eventId, choiceIdx) {
   const ctx = buildEventContext(evt);
   const choice = ev.choices[choiceIdx];
   if (!choice) return;
+  try {
+    if (choice.condition && !choice.condition(ctx)) { log('条件不满足，无法选择该选项'); return; }
+  } catch (e) { log('事件条件判断失败'); return; }
   let result = '';
   if (choice.effect) result = choice.effect(ctx) || '';
   resolveEvent(evt, result);

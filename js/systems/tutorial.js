@@ -62,7 +62,8 @@ function prevTutorialStep() {
 function skipTutorial() {
   getState().tutorial = false;
   getState().tutorialStep = 0;
-  document.getElementById('tutorial').style.display = 'none';
+  const overlay = document.getElementById('tutorial');
+  if (overlay) overlay.style.display = 'none';
   document.querySelectorAll('.tutorial-target').forEach(el => el.classList.remove('tutorial-target'));
   try { localStorage.setItem('sanguo_slg_tutorial_seen', '1'); } catch (e) {}
   saveAuto();

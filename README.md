@@ -20,9 +20,14 @@ python3 -m http.server 8000
 
 - 重构 UI 层：新增 `js/ui/common.js` 统一通用渲染/弹窗/特效，删除 `js/ui/modal.js`。
 - 新增 `js/core/log.js` 解耦日志与工具函数，消除 `state.js` 与 `utils.js` 的循环依赖。
-- 战斗核心 `js/core/battle.js` 不再依赖 UI/音频/成就模块，结果由调用方处理。
-- 修复若干运行时风险：关系矩阵缺行、历史事件触发条件、存档导出弹窗、科技事件字段等。
-- 清理未使用导入/导出，补充 DOM 元素空值检查。
+- 战斗核心 `js/core/battle.js` 不再依赖 UI/音频/成就模块，结果由调用方处理；移除旧版 `battle()` 双轨逻辑。
+- 修复玩家政策（`state.policy` vs `player().policy`）对经济/招兵结算失效的问题。
+- 修复读档后日志写入旧 `state` 对象、装备池 `owned` 状态丢失、事件选项条件函数序列化丢失的问题。
+- 修复中文加密导出存档因 `btoa` 抛错而失败的问题，改用 `TextEncoder`/`TextDecoder`。
+- 修复 AI 每回合通过旧 `battle()` 与军团系统进攻两次的问题。
+- 自动保存失败不再静默吞错；本地存档加入 `_version` 版本元数据。
+- 补充多处空值安全：势力/城池/武将缺失、DOM 元素不存在、关系矩阵缺行等。
+- 清理未使用导入/导出，解除 `core/state.js` 对 `localStorage` / `window` 的直接依赖。
 
 ## 游戏特色
 

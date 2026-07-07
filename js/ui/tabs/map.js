@@ -65,6 +65,7 @@ function renderMap(c) {
 
   // ---- 抗重叠：测量真实容器尺寸后在真实像素空间迭代推开重叠节点 ----
   const wrap = c.querySelector('.map-wrapper');
+  if (!wrap) return;
   const W = wrap.clientWidth || 900;
   const H = wrap.clientHeight || (W * 10 / 16);
   const NODE_HW = 30, NODE_HH = 17;   // 节点真实半宽/半高（含少量间距）

@@ -18,6 +18,7 @@ function renderLogs() {
 function renderHeader() {
   const state = getState();
   const p = player();
+  if (!p) return;
   const hRes = document.getElementById('h-res');
   const hDate = document.getElementById('h-date');
   const hSeason = document.getElementById('h-season');
