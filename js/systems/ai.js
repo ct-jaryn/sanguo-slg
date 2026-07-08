@@ -5,6 +5,7 @@ import {
   factionArmies, relation, setRelation, effectiveStats
 } from '../core/utils.js';
 import { AI_COMP_PREFS, RIVER_CITIES, DIFFICULTY } from '../config/constants.js';
+import { getEliteTroop, eliteCap, eliteUnlocked } from '../config/eliteTroops.js';
 import { TACTICS } from '../config/tactics.js';
 import { armyBattle } from '../core/battle.js';
 import { checkAchievements } from './achievements.js';
@@ -130,13 +131,19 @@ function aiTurn(f) {
   }
   // Auto-create or replenish one army per city if enough troops
   const myArmies = factionArmies(f.id);
+  const eliteCfg = getEliteTroop(f.id);
   cities.forEach(city=>{
     const stationed = myArmies.filter(a=>a.city===city.name);
     if(stationed.length===0 && city.troops>=500){
       const use = Math.min(city.troops, 1500);
       const comp = getOptimalAIComp(f, city, use);
       const gens = pickAIGenerals(f, comp.hint);
-      st.armies.push({id:st.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, formation:comp.formation, infantry:comp.infantry, cavalry:comp.cavalry, archer:comp.archer, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
+      let elite = 0;
+      if (eliteCfg && eliteUnlocked(f)) {
+        const baseCount = comp[eliteCfg.base] || 0;
+        elite = Math.min(Math.floor(baseCount * 0.3), Math.floor(use * 0.2));
+      }
+      st.armies.push({id:st.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, formation:comp.formation, infantry:comp.infantry, cavalry:comp.cavalry, archer:comp.archer, elite, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
       city.troops -= use;
     } else if(stationed.length && city.troops>=300){
       const a = stationed[0];
@@ -144,6 +151,13 @@ function aiTurn(f) {
       const comp = getOptimalAIComp(f, city, add);
       a.infantry += comp.infantry; a.cavalry += comp.cavalry; a.archer += comp.archer;
       if (!a.formation) a.formation = comp.formation;
+      if (eliteCfg && eliteUnlocked(f)) {
+        const baseAdded = comp[eliteCfg.base] || 0;
+        const addElite = Math.min(Math.floor(baseAdded * 0.3), Math.floor(add * 0.2));
+        a.elite = (a.elite || 0) + addElite;
+        const cap = eliteCap(a, eliteCfg);
+        if (a.elite > cap) a.elite = cap;
+      }
       city.troops -= add;
     }
   });

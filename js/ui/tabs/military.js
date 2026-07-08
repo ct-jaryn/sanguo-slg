@@ -6,8 +6,9 @@ import {
   availableGenerals
 } from '../../core/utils.js';
 import { FORMATIONS, getCityTraitEffects, TROOP_TYPES, TROOP_MAX_LEVEL } from '../../config/constants.js';
+import { getEliteTroop, eliteCap, eliteUnlocked } from '../../config/eliteTroops.js';
 import { TACTICS } from '../../config/tactics.js';
-import { armyBattle } from '../../core/battle.js';
+import { armyBattle, estimateBattle } from '../../core/battle.js';
 import { showBattleFx, showBattleReport, renderAll, closeModal } from '../common.js';
 import { playSound } from '../../systems/audio.js';
 import { checkAchievements } from '../../systems/achievements.js';
@@ -24,11 +25,13 @@ function renderMilitary(c) {
   html += `<button class="action" onclick="appActions.openArmyEditor()">组建新军团</button>`;
   html += `</div>`;
 
+  const eliteCfg = getEliteTroop(state.playerId);
   html += `<div class="card"><h3>我的军团</h3>`;
   if (myArmies.length === 0) {
     html += `<p>暂无军团，请组建军团后出征。</p>`;
   } else {
-    html += `<table><tr><th>军团</th><th>驻扎</th><th>主将</th><th>将领</th><th>阵型</th><th>步兵</th><th>骑兵</th><th>弓兵</th><th>总兵力</th><th>操作</th></tr>`;
+    const eliteHeader = eliteCfg ? `<th>${eliteCfg.name}</th>` : '';
+    html += `<table><tr><th>军团</th><th>驻扎</th><th>主将</th><th>将领</th><th>阵型</th><th>步兵</th><th>骑兵</th><th>弓兵</th>${eliteHeader}<th>总兵力</th><th>操作</th></tr>`;
     myArmies.forEach(a => {
       const main = a.generals.length ? a.generals[0] : '-';
       const form = FORMATIONS[a.formation] || FORMATIONS.yulin;
@@ -36,6 +39,7 @@ function renderMilitary(c) {
       const infName = TROOP_TYPES.infantry.name + (lvl.infantry > 1 ? ` Lv.${lvl.infantry}` : '');
       const cavName = TROOP_TYPES.cavalry.name + (lvl.cavalry > 1 ? ` Lv.${lvl.cavalry}` : '');
       const arcName = TROOP_TYPES.archer.name + (lvl.archer > 1 ? ` Lv.${lvl.archer}` : '');
+      const eliteCell = eliteCfg ? `<td title="${eliteCfg.desc}">${a.elite || 0}</td>` : '';
       html += `<tr>
         <td>${a.name}</td>
         <td>${a.city || '待命'}</td>
@@ -45,6 +49,7 @@ function renderMilitary(c) {
         <td title="${TROOP_TYPES.infantry.traitDesc}">${a.infantry} ${infName}</td>
         <td title="${TROOP_TYPES.cavalry.traitDesc}">${a.cavalry} ${cavName}</td>
         <td title="${TROOP_TYPES.archer.traitDesc}">${a.archer} ${arcName}</td>
+        ${eliteCell}
         <td>${armyTroopTotal(a)}</td>
         <td>
           <button class="action" onclick="appActions.openArmyEditor(${a.id})">调整</button>
@@ -69,9 +74,9 @@ function renderMilitary(c) {
     }).join('') : '';
     const toOptions = neighborOpts || '<option value="">无相邻目标</option>';
     html += `<div style="margin:8px 0">
-      <label>军团：</label><select id="atk-army" onchange="appActions.updateAtkTargets()">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
-      <label> 目标城：</label><select id="atk-to">${toOptions}</select>
-      <label> 战术：</label><select id="atk-tactic">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
+      <label>军团：</label><select id="atk-army" onchange="appActions.updateAtkTargets(); appActions.updateAtkPreview();">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
+      <label> 目标城：</label><select id="atk-to" onchange="appActions.updateAtkPreview()">${toOptions}</select>
+      <label> 战术：</label><select id="atk-tactic" onchange="appActions.updateAtkPreview()">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
       <button class="action" onclick="appActions.doArmyAttack()">出征</button>
     </div>`;
     html += `<div id="tactic-desc" style="font-size:0.85rem;color:var(--muted)"></div>`;
@@ -98,7 +103,8 @@ function renderMilitary(c) {
   const armySel = document.getElementById('atk-army');
   const toSel = document.getElementById('atk-to');
   if (armySel && toSel) {
-    armySel.addEventListener('change', appActions.updateAtkTargets);
+    armySel.addEventListener('change', () => { appActions.updateAtkTargets(); appActions.updateAtkPreview(); });
+    toSel.addEventListener('change', appActions.updateAtkPreview);
     appActions.updateAtkTargets();
     const tacticSel = document.getElementById('atk-tactic');
     const tacticDesc = document.getElementById('tactic-desc');
@@ -114,6 +120,7 @@ function renderMilitary(c) {
       tacticSel.addEventListener('change', updateTacticDesc);
       updateTacticDesc();
     }
+    appActions.updateAtkPreview();
   }
 }
 
@@ -138,6 +145,31 @@ function updateAtkTargets() {
     const firstReal = Array.from(toSel.options).find(o => o.value);
     if (firstReal) toSel.value = firstReal.value;
   }
+}
+
+function updateAtkPreview() {
+  const state = getState();
+  const armySel = document.getElementById('atk-army');
+  const toSel = document.getElementById('atk-to');
+  const tacticSel = document.getElementById('atk-tactic');
+  const preview = document.getElementById('atk-preview');
+  if (!armySel || !toSel || !tacticSel || !preview) return;
+  const armyId = parseInt(armySel.value, 10);
+  const army = isNaN(armyId) ? null : findArmy(armyId);
+  const targetName = toSel.value;
+  const target = targetName ? findCity(targetName) : null;
+  if (!army || !target) { preview.innerHTML = ''; return; }
+  const tacticKey = tacticSel.value || 'normal';
+  const est = estimateBattle(army, target, tacticKey);
+  const color = est.chance >= 55 ? '#1a5c1a' : (est.chance >= 40 ? '#b8860b' : '#c41e3a');
+  preview.innerHTML = `
+    <div style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.03);border-radius:4px;font-size:0.9rem">
+      <b>战前估算 · ${est.hint}</b>
+      <span style="color:${color};font-weight:bold">（胜率约 ${est.chance}%）</span><br/>
+      攻方战力：${est.atkPower} · 守方战力：${est.defPower} · 战术：${est.tacticName}${est.water ? ' · 水战加成' : ''}
+      ${est.counterTip ? `<br/><span style="color:var(--accent-red)">${est.counterTip}</span>` : ''}
+    </div>
+  `;
 }
 
 function reinforceCity(dir) {
@@ -221,6 +253,14 @@ function openArmyEditor(armyId=null) {
   const content = document.getElementById('modal-content');
   if (!modal || !content) return;
   modal.style.display='flex';
+    const eliteCfg = getEliteTroop(state.playerId);
+    const unlocked = eliteCfg && eliteUnlocked(p);
+    const cap = army && eliteCfg ? eliteCap(army, eliteCfg) : 0;
+    const eliteInput = eliteCfg ? `
+      <div style="margin:8px 0"><label>${eliteCfg.name}：</label><input type="number" id="army-elite" value="${army?army.elite||0:0}" min="0" step="50" style="width:80px">
+        <span style="font-size:0.85rem;color:var(--muted)">${unlocked ? `上限 ${cap}（占${eliteCfg.base==='infantry'?'步兵':eliteCfg.base==='cavalry'?'骑兵':'弓兵'}的30%）` : '需军事科技2级解锁'}</span>
+      </div>
+    ` : '';
     content.innerHTML = `
     <h2>${army?'调整军团':'组建新军团'}</h2>
     <div style="margin:8px 0"><label>军团名称：</label><input id="army-name" value="${army?army.name:state.factions[state.playerId].name+(currentCount+1)+'军'}" style="width:140px"></div>
@@ -231,7 +271,8 @@ function openArmyEditor(armyId=null) {
     <div style="margin:8px 0"><label>步兵：</label><input type="number" id="army-infantry" value="${army?army.infantry:0}" min="0" step="100" style="width:80px"></div>
     <div style="margin:8px 0"><label>骑兵：</label><input type="number" id="army-cavalry" value="${army?army.cavalry:0}" min="0" step="100" style="width:80px"></div>
     <div style="margin:8px 0"><label>弓兵：</label><input type="number" id="army-archer" value="${army?army.archer:0}" min="0" step="100" style="width:80px"></div>
-    <p>可用兵力：${Math.floor(p.troops)} · 兵种特技：步兵-${TROOP_TYPES.infantry.traitDesc} 骑兵-${TROOP_TYPES.cavalry.traitDesc} 弓兵-${TROOP_TYPES.archer.traitDesc}</p>
+    ${eliteInput}
+    <p>可用兵力：${Math.floor(p.troops)} · 兵种特技：步兵-${TROOP_TYPES.infantry.traitDesc} 骑兵-${TROOP_TYPES.cavalry.traitDesc} 弓兵-${TROOP_TYPES.archer.traitDesc}${eliteCfg ? ' · ' + eliteCfg.name + '：' + eliteCfg.desc : ''}</p>
     <div style="margin-top:12px"><button class="action" onclick="appActions.saveArmy(${armyId||'null'})" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">保存</button>
     <button class="action" onclick="appActions.closeModal()">取消</button></div>
   `;
@@ -247,9 +288,21 @@ function saveArmy(armyId) {
   const infantry = Math.max(0, parseInt(document.getElementById('army-infantry').value)||0);
   const cavalry = Math.max(0, parseInt(document.getElementById('army-cavalry').value)||0);
   const archer = Math.max(0, parseInt(document.getElementById('army-archer').value)||0);
+  const eliteCfg = getEliteTroop(state.playerId);
+  const eliteInput = document.getElementById('army-elite');
+  let elite = eliteInput ? Math.max(0, parseInt(eliteInput.value)||0) : 0;
+  if (eliteCfg && elite > 0 && !eliteUnlocked(p)) { alert('精锐部队尚未解锁'); return; }
+  if (eliteCfg) {
+    const baseCount = { infantry, cavalry, archer }[eliteCfg.base] || 0;
+    const maxElite = Math.floor(baseCount * 0.3);
+    if (elite > maxElite) { alert(`${eliteCfg.name} 不能超过对应基础兵力的30%（当前上限 ${maxElite}）`); return; }
+  } else {
+    elite = 0;
+  }
+
   const existing = armyId ? findArmy(armyId) : null;
   const existingTotal = existing ? armyTroopTotal(existing) : 0;
-  const total = infantry + cavalry + archer;
+  const total = infantry + cavalry + archer + elite;
   if(total > p.troops + existingTotal){ alert('兵力不足'); return; }
   if(total < 100){ alert('军团总兵力至少100'); return; }
 
@@ -258,15 +311,15 @@ function saveArmy(armyId) {
     if (!army) { alert('军团不存在'); return; }
     p.troops += armyTroopTotal(army);
     army.name = name; army.city = city; army.generals = gens; army.formation = formation;
-    army.infantry = infantry; army.cavalry = cavalry; army.archer = archer;
+    army.infantry = infantry; army.cavalry = cavalry; army.archer = archer; army.elite = elite;
     if (!army.troopXP) army.troopXP = { infantry: 0, cavalry: 0, archer: 0 };
     if (!army.troopLevel) army.troopLevel = { infantry: 1, cavalry: 1, archer: 1 };
     p.troops -= total;
-    log(`调整军团 ${name}，总兵力 ${total}`);
+    log(`调整军团 ${name}，总兵力 ${total}${elite > 0 ? '，含 ' + elite + ' ' + eliteCfg.name : ''}`);
   }else{
-    state.armies.push({id:state.nextArmyId++, faction:state.playerId, name, city, generals:gens, formation, infantry, cavalry, archer, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
+    state.armies.push({id:state.nextArmyId++, faction:state.playerId, name, city, generals:gens, formation, infantry, cavalry, archer, elite, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
     p.troops -= total;
-    log(`组建军团 ${name}，总兵力 ${total}`);
+    log(`组建军团 ${name}，总兵力 ${total}${elite > 0 ? '，含 ' + elite + ' ' + eliteCfg.name : ''}`);
   }
   closeModal();
   renderAll();
@@ -284,4 +337,4 @@ function disbandArmy(armyId) {
   renderAll();
 }
 
-export { renderMilitary, updateAtkTargets, reinforceCity, doArmyAttack, openArmyEditor, saveArmy, disbandArmy };
+export { renderMilitary, updateAtkTargets, updateAtkPreview, reinforceCity, doArmyAttack, openArmyEditor, saveArmy, disbandArmy };

@@ -223,22 +223,68 @@ const EVENTS = [
     ]
   },
   {
-    id:'season_spring', title:'春耕', type:'auto', weight:0,
+    id:'season_spring', title:'春耕', type:'auto', weight:0, season:'春',
     condition:(ctx)=>getSeason()==='春',
-    desc:(ctx)=>`春意盎然，各地忙于春耕。`,
-    effect:(ctx)=>{ ctx.faction.food += factionCities(ctx.faction.id).length * 30; }
+    desc:(ctx)=>`春意盎然，${ctx.city.name} 忙于春耕，粮产增加。`,
+    effect:(ctx)=>{ ctx.faction.food += 30 + Math.floor(Math.random()*21); ctx.city.food += 10; }
   },
   {
-    id:'season_autumn', title:'秋收', type:'auto', weight:0,
+    id:'season_summer', title:'酷暑', type:'auto', weight:0, season:'夏',
+    condition:(ctx)=>getSeason()==='夏',
+    desc:(ctx)=>`夏日炎炎，${ctx.city.name} 士卒消耗加剧。`,
+    effect:(ctx)=>{ ctx.faction.food = Math.max(0, ctx.faction.food - 20 - Math.floor(Math.random()*21)); }
+  },
+  {
+    id:'season_autumn', title:'秋收', type:'auto', weight:0, season:'秋',
     condition:(ctx)=>getSeason()==='秋',
-    desc:(ctx)=>`秋高气爽，粮仓渐满。`,
-    effect:(ctx)=>{ ctx.faction.food += factionCities(ctx.faction.id).length * 50; }
+    desc:(ctx)=>`秋高气爽，${ctx.city.name} 粮仓渐满。`,
+    effect:(ctx)=>{ ctx.faction.food += 50 + Math.floor(Math.random()*31); ctx.city.food += 15; }
   },
   {
-    id:'season_winter', title:'冬寒', type:'auto', weight:0,
+    id:'season_winter', title:'冬寒', type:'auto', weight:0, season:'冬',
     condition:(ctx)=>getSeason()==='冬',
-    desc:(ctx)=>`寒冬腊月，士卒难耐。`,
-    effect:(ctx)=>{ ctx.faction.food -= factionCities(ctx.faction.id).length * 20; }
+    desc:(ctx)=>`寒冬腊月，${ctx.city.name} 士卒难耐，粮食消耗增加。`,
+    effect:(ctx)=>{ ctx.faction.food = Math.max(0, ctx.faction.food - 25 - Math.floor(Math.random()*16)); }
+  },
+  {
+    id:'spring_flood', title:'春汛', type:'choice', weight:0, season:'春',
+    condition:(ctx)=>getSeason()==='春' && RIVER_CITIES.includes(ctx.city.name),
+    desc:(ctx)=>`${ctx.city.name} 河水上涨，春汛来临。`,
+    choices:[
+      {label:'加固堤防（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.food += 10; return '堤防加固，粮产增加。'; }},
+      {label:'疏浚河道（300兵）', condition:(ctx)=>ctx.faction.troops>=300, effect:(ctx)=>{ ctx.faction.troops-=300; ctx.city.money += 20; return '河道疏通，商业受益。'; }},
+      {label:'放任', effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-20); ctx.city.money = Math.max(0, ctx.city.money-15); return '春汛泛滥，粮产与收入受损。'; }}
+    ]
+  },
+  {
+    id:'summer_drought', title:'伏旱', type:'choice', weight:0, season:'夏',
+    condition:(ctx)=>getSeason()==='夏' && Math.random()<0.5,
+    desc:(ctx)=>`${ctx.city.name} 久旱无雨，禾苗枯萎。`,
+    choices:[
+      {label:'开渠引水（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; ctx.city.food = Math.max(0, ctx.city.food-10); return '引水灌溉，旱情缓解。'; }},
+      {label:'开仓赈济（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.city.morale = Math.min(100, ctx.city.morale+5); return '赈济灾民，民心稳定。'; }},
+      {label:'听天由命', effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-40); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '旱灾严重，粮产与民心大损。'; }}
+    ]
+  },
+  {
+    id:'autumn_harvest_fair', title:'秋市', type:'choice', weight:0, season:'秋',
+    condition:(ctx)=>getSeason()==='秋',
+    desc:(ctx)=>`${ctx.city.name} 秋收喜人，商贾云集。`,
+    choices:[
+      {label:'征税（金钱+300）', effect:(ctx)=>{ ctx.faction.gold += 300; ctx.city.morale = Math.max(20, ctx.city.morale-5); return '征收商税，民心稍降。'; }},
+      {label:'免税促市', effect:(ctx)=>{ ctx.city.money += 30; ctx.city.morale = Math.min(100, ctx.city.morale+10); return '免税让商贾云集，民心提升。'; }},
+      {label:'收购军粮（200金换400粮）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food+=400; return '收购军粮，备战充足。'; }}
+    ]
+  },
+  {
+    id:'winter_snow', title:'雪灾', type:'choice', weight:0, season:'冬',
+    condition:(ctx)=>getSeason()==='冬' && Math.random()<0.4,
+    desc:(ctx)=>`${ctx.city.name} 大雪封城，民夫冻伤。`,
+    choices:[
+      {label:'发放冬衣（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.morale = Math.min(100, ctx.city.morale+10); return '冬衣发放，民心安定。'; }},
+      {label:'征调民夫清雪（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.city.money += 20; return '道路疏通，商业恢复。'; }},
+      {label:'置之不顾', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-100); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '积雪成灾，守军与民心受损。'; }}
+    ]
   },
   {
     id:'cooking_wine', title:'煮酒论英雄', type:'choice', weight:0,

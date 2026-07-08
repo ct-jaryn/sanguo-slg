@@ -201,20 +201,33 @@ function randomEvent() {
 
 function triggerSeasonEvent() {
   const season = getSeason();
-  const seasonEvents = EVENTS.filter(ev => ev.id.startsWith('season_') && ev.id.endsWith(season));
+  const seasonEvents = EVENTS.filter(ev => ev.season === season);
   if (!seasonEvents.length) return;
   Object.values(getState().factions).filter(f => !f.eliminated).forEach(f => {
     const cities = factionCities(f.id);
     if (!cities.length) return;
     const city = cities[Math.floor(Math.random() * cities.length)];
-    const ev = seasonEvents[0];
+    // 随机挑选一个满足条件的季节事件
+    const candidates = seasonEvents.filter(ev => {
+      const ctx = { state: getState(), faction: f, city };
+      try { return !ev.condition || ev.condition(ctx); } catch (e) { return false; }
+    });
+    if (!candidates.length) return;
+    const ev = candidates[Math.floor(Math.random() * candidates.length)];
     const ctx = { state: getState(), faction: f, city };
-    if (ev.condition && !ev.condition(ctx)) return;
     if (f.id === getState().playerId) {
       addPendingEvent(ev, ctx);
     } else {
       // AI 季节事件直接结算
-      if (ev.effect) ev.effect(ctx);
+      if (ev.type === 'choice' && ev.choices) {
+        let choice = ev.choices[ev.choices.length - 1];
+        for (const c of ev.choices) {
+          try { if (!c.condition || c.condition(ctx)) { choice = c; break; } } catch (e) {}
+        }
+        if (choice.effect) choice.effect(ctx);
+      } else if (ev.effect) {
+        ev.effect(ctx);
+      }
     }
   });
 }

@@ -41,6 +41,7 @@ function renderSidebar() {
     {id:'map',label:'地图'},
     {id:'events',label:'事件'},
     {id:'achievements',label:'成就'},
+    {id:'quests',label:'任务'},
     {id:'logs',label:'日志'}
   ];
   const pendingCount = state.pendingEvents.filter(e=>e.factionId===state.playerId).length;
@@ -123,6 +124,7 @@ function tabTip(tab) {
     map: '提示：点击地图上的城池可快速切换到军事面板。',
     events: '提示：及时处理事件，选择最适合当前局势的选项。',
     achievements: '提示：完成成就可获得称号展示，部分成就需要长期经营。',
+    quests: '提示：完成任务可获得金钱、粮食、兵力或装备奖励。',
     logs: '提示：这里显示完整的事件历史。'
   };
   return tips[tab] || '';

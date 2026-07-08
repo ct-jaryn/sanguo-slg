@@ -9,7 +9,7 @@ import {
   doInternal, setDifficulty, setPolicy
 } from './ui/tabs/internal.js';
 import {
-  updateAtkTargets, reinforceCity, doArmyAttack, openArmyEditor, saveArmy, disbandArmy
+  updateAtkTargets, updateAtkPreview, reinforceCity, doArmyAttack, openArmyEditor, saveArmy, disbandArmy
 } from './ui/tabs/military.js';
 import {
   openEquipShop, buyEquip, equipItem, recruitGeneral
@@ -45,6 +45,7 @@ const appActions = {
   setPolicy,
 
   updateAtkTargets,
+  updateAtkPreview,
   reinforceCity,
   doArmyAttack,
   openArmyEditor,

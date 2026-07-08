@@ -4,6 +4,7 @@ import {
   factionCities, factionArmies, getSeason, relation, setRelation
 } from '../core/utils.js';
 import { DIFFICULTY, getCityTraitEffects } from '../config/constants.js';
+import { getEliteTroop } from '../config/eliteTroops.js';
 import { POLICIES } from '../config/policies.js';
 import { SKILLS } from '../config/skills.js';
 import { aiTurn, aiArmyAttack } from './ai.js';
@@ -11,6 +12,7 @@ import { historicalEvents, triggerSeasonEvent, randomEvent, triggerRandomEvent, 
 import { checkEliminations, checkVictory } from './gameEnd.js';
 import { saveAuto } from './save.js';
 import { checkAchievements } from './achievements.js';
+import { checkQuests } from '../config/quests.js';
 
 function advanceDate(state) {
   state.month++;
@@ -93,10 +95,13 @@ function consumeUpkeep(f, cities) {
 
 function consumeArmyFood(f) {
   const myArmies = factionArmies(f.id);
+  const eliteCfg = getEliteTroop(f.id);
   myArmies.forEach(a => {
+    const eliteFoodMul = eliteCfg ? (eliteCfg.food || 1) : 1;
     const foodNeed = Math.floor(a.infantry / 100) * 20
       + Math.floor(a.cavalry / 100) * 30
-      + Math.floor(a.archer / 100) * 22;
+      + Math.floor(a.archer / 100) * 22
+      + Math.floor((a.elite || 0) / 100) * 20 * (eliteFoodMul - 1);
     f.food -= foodNeed;
   });
 }
@@ -144,6 +149,8 @@ function endTurnCleanup(state) {
   checkEliminations();
   checkVictory();
   checkAchievements();
+  const completed = checkQuests();
+  completed.forEach(q => log(`任务完成：${q.name} — ${q.rewardText}`));
   autoResolveAllPending();
   saveAuto();
 }

@@ -196,6 +196,7 @@ function deserializeState(data) {
   if (!state.shownTips) state.shownTips = {};
   if (!state.achievements) state.achievements = {};
   if (!state.stats) state.stats = { wins: 0, battles: 0, generalsDefeated: 0, citiesLost: 0, eventsResolved: 0 };
+  if (!state.quests) state.quests = {};
   if (!state.eventChains) state.eventChains = {};
   if (state.tutorialStep === undefined) state.tutorialStep = 0;
   if (state.endingTitle === undefined) state.endingTitle = null;
@@ -206,11 +207,12 @@ function deserializeState(data) {
     if (g.level === undefined) g.level = 1;
     if (!g.equipment) g.equipment = { weapon: null, armor: null, horse: null };
   });
-  // 兼容旧军团：补齐阵型、兵种经验与等级
+  // 兼容旧军团：补齐阵型、兵种经验与等级、精锐
   (state.armies || []).forEach(a => {
     if (!a.formation) a.formation = 'yulin';
     if (!a.troopXP) a.troopXP = { infantry: 0, cavalry: 0, archer: 0 };
     if (!a.troopLevel) a.troopLevel = { infantry: 1, cavalry: 1, archer: 1 };
+    if (a.elite === undefined) a.elite = 0;
   });
   // 兼容旧存档：将全局政策迁移到玩家势力对象
   if (state.policy && state.factions[state.playerId]) {

@@ -44,6 +44,7 @@ function initState() {
     shownTips: {},
     achievements: {},
     stats: { wins: 0, battles: 0, generalsDefeated: 0, citiesLost: 0, eventsResolved: 0 },
+    quests: {},
     eventChains: {},
     endingTitle: null,
     equipmentPool: JSON.parse(JSON.stringify(EQUIPMENT_POOL))

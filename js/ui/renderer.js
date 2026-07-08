@@ -9,6 +9,7 @@ import { renderTalent } from './tabs/talent.js';
 import { renderDiplomacy } from './tabs/diplomacy.js';
 import { renderMap } from './tabs/map.js';
 import { renderEvents, renderAchievements, renderLogPage } from './tabs/events.js';
+import { renderQuests } from './tabs/quests.js';
 
 function renderContent() {
   const state = getState();
@@ -34,6 +35,7 @@ function renderContent() {
     case 'map': renderMap(contentDiv); break;
     case 'events': renderEvents(contentDiv); break;
     case 'achievements': renderAchievements(contentDiv); break;
+    case 'quests': renderQuests(contentDiv); break;
     case 'logs': renderLogPage(contentDiv); break;
   }
   c.innerHTML = topHtml + contentDiv.innerHTML;

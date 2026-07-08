@@ -8,6 +8,7 @@ import {
   TROOP_TYPES, COUNTER_BONUS, cityDefenseComp, counterFactor, RIVER_CITIES,
   FORMATIONS, getCityTraitEffects, troopLevelBonus, addTroopXP
 } from '../config/constants.js';
+import { getEliteTroop, eliteRatio } from '../config/eliteTroops.js';
 import { BONDS } from '../config/bonds.js';
 import { TACTICS } from '../config/tactics.js';
 import { SKILLS } from '../config/skills.js';
@@ -22,6 +23,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   const atkForm = getFormationMods(army);
   const lossMul = atkForm.lossMul;
   const playerInvolved = attackerId === getState().playerId || defenderId === getState().playerId;
+  const atkEliteCfg = getEliteTroop(attackerId);
 
   // 围城：多回合消耗，第一次不判定胜负
   if (tacticKey === 'siege') {
@@ -30,7 +32,12 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     const bond = getArmyBondBonus(army);
     const bondMul = bond.mods.forceMul * bond.mods.atkMul;
     const cityTraits = getCityTraitEffects(targetCity);
-    const siegeDamage = Math.floor(total * 0.15 * bondMul / cityTraits.defMul * cityTraits.defenseMul);
+    let siegeMul = 1;
+    if (atkEliteCfg && atkEliteCfg.siegeAtk) {
+      const ratio = eliteRatio(army, atkEliteCfg);
+      siegeMul = 1 + ratio * (atkEliteCfg.siegeAtk - 1);
+    }
+    const siegeDamage = Math.floor(total * 0.15 * bondMul * siegeMul / cityTraits.defMul * cityTraits.defenseMul);
     targetCity.troops = Math.max(0, targetCity.troops - siegeDamage);
     targetCity.siegeProgress.progress += Math.floor(25 / cityTraits.defMul);
     const losses = Math.floor(total * 0.05 * lossMul);
@@ -73,6 +80,10 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     const lvlBonus = troopLevelBonus(army.troopLevel?.[typeKey] || 1);
     let base = troops * (0.5 + stats.force/200) * (0.5 + stats.command/200) * tt.atk * lvlBonus;
     if(typeKey==='archer') base *= tt.siegeAtk;
+    if (atkEliteCfg && typeKey === atkEliteCfg.base) {
+      const ratio = eliteRatio(army, atkEliteCfg);
+      base *= (1 + ratio * (atkEliteCfg.atk - 1));
+    }
     attack += base;
   });
   let aMods = {forceMul:1, atkMul:1, moraleMul:1, defMul:1, woundExtra:0};
@@ -106,7 +117,14 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   const cityTraits = getCityTraitEffects(targetCity);
 
   // 水战加成
-  if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) attack *= 1.25 * cityTraits.waterAtkMul;
+  if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) {
+    let waterMul = 1.25 * cityTraits.waterAtkMul;
+    if (atkEliteCfg && atkEliteCfg.waterAtk) {
+      const ratio = eliteRatio(army, atkEliteCfg);
+      waterMul *= (1 + ratio * (atkEliteCfg.waterAtk - 1));
+    }
+    attack *= waterMul;
+  }
 
   // 军事科技攻击加成
   attack *= (1 + (atkFaction?.tech?.military?.atkBonus || 0) / 100);
@@ -127,6 +145,11 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
 
   let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+  const defEliteCfg = defenderId !== 'neutral' ? getEliteTroop(defenderId) : null;
+  if (defEliteCfg && defArmy) {
+    const ratio = eliteRatio(defArmy, defEliteCfg);
+    defense *= (1 + ratio * (defEliteCfg.def - 1));
+  }
   defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
   if(defGeneral) defense *= (0.5 + defStats.command/200);
   if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
@@ -207,6 +230,7 @@ function applyArmyLosses(army, total, losses) {
   army.infantry = Math.floor(army.infantry * ratio);
   army.cavalry = Math.floor(army.cavalry * ratio);
   army.archer = Math.floor(army.archer * ratio);
+  if (army.elite) army.elite = Math.floor(army.elite * ratio);
 }
 
 function getArmyBondBonus(army) {
@@ -269,8 +293,113 @@ function awardRandomEquipment() {
   return pool[0];
 }
 
+function estimateBattle(army, targetCity, tacticKey = 'normal') {
+  const total = armyTroopTotal(army);
+  const attackerId = army.faction;
+  const defenderId = targetCity.owner || 'neutral';
+  const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
+  const stats = effectiveStats(mainGeneral);
+  const atkFaction = getState().factions[attackerId];
+  const tactic = TACTICS[tacticKey] || TACTICS.normal;
+  const atkForm = getFormationMods(army);
+  const atkEliteCfg = getEliteTroop(attackerId);
+
+  let attack = 0;
+  [['infantry', army.infantry], ['cavalry', army.cavalry], ['archer', army.archer]].forEach(([typeKey, troops]) => {
+    if (troops <= 0) return;
+    const tt = TROOP_TYPES[typeKey];
+    const lvlBonus = troopLevelBonus(army.troopLevel?.[typeKey] || 1);
+    let base = troops * (0.5 + stats.force / 200) * (0.5 + stats.command / 200) * tt.atk * lvlBonus;
+    if (typeKey === 'archer') base *= tt.siegeAtk;
+    if (atkEliteCfg && typeKey === atkEliteCfg.base) {
+      const ratio = eliteRatio(army, atkEliteCfg);
+      base *= (1 + ratio * (atkEliteCfg.atk - 1));
+    }
+    attack += base;
+  });
+
+  let aMods = { forceMul: 1, atkMul: 1, moraleMul: 1, defMul: 1, woundExtra: 0 };
+  let dMods = { forceMul: 1, atkMul: 1, moraleMul: 1, defMul: 1, woundExtra: 0 };
+  if (mainGeneral && mainGeneral.skill && SKILLS[mainGeneral.skill] && typeof SKILLS[mainGeneral.skill].battle === 'function') SKILLS[mainGeneral.skill].battle(aMods, dMods);
+
+  const atkBond = getArmyBondBonus(army);
+  if (atkBond.active.length) {
+    const b = atkBond.mods;
+    aMods.forceMul *= b.forceMul; aMods.atkMul *= b.atkMul; aMods.moraleMul *= b.moraleMul; aMods.defMul *= b.defMul; aMods.woundExtra += b.woundExtra;
+  }
+  const defArmy = getState().armies.find(a => a.faction === defenderId && a.city === targetCity.name);
+  const defBond = getArmyBondBonus(defArmy);
+  if (defBond.active.length) {
+    const b = defBond.mods;
+    dMods.forceMul *= b.forceMul; dMods.atkMul *= b.atkMul; dMods.moraleMul *= b.moraleMul; dMods.defMul *= b.defMul; dMods.woundExtra += b.woundExtra;
+  }
+
+  aMods.atkMul *= atkForm.atkMul; aMods.defMul *= atkForm.defMul;
+  const defForm = defArmy ? getFormationMods(defArmy) : { atkMul: 1, defMul: 1, lossMul: 1 };
+  dMods.atkMul *= defForm.atkMul; dMods.defMul *= defForm.defMul;
+  applyTroopTraitMods(army, targetCity, 'attack', aMods);
+  if (defArmy) applyTroopTraitMods(defArmy, targetCity, 'defense', dMods);
+
+  attack *= aMods.forceMul * aMods.atkMul * tactic.atk;
+
+  const cityTraits = getCityTraitEffects(targetCity);
+  if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) {
+    let waterMul = 1.25 * cityTraits.waterAtkMul;
+    if (atkEliteCfg && atkEliteCfg.waterAtk) {
+      const ratio = eliteRatio(army, atkEliteCfg);
+      waterMul *= (1 + ratio * (atkEliteCfg.waterAtk - 1));
+    }
+    attack *= waterMul;
+  }
+
+  attack *= (1 + (atkFaction?.tech?.military?.atkBonus || 0) / 100);
+
+  const atkShare = { infantry: army.infantry / total, cavalry: army.cavalry / total, archer: army.archer / total };
+  const defComp = cityDefenseComp(targetCity);
+  attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
+  attack *= cityTraits.defenseMul;
+
+  const defFaction = targetCity.owner ? getState().factions[targetCity.owner] : null;
+  const fortBonus = defFaction?.tech?.fort?.defBonus || 0;
+  const defGeneral = defenderId !== 'neutral' ? factionGenerals(defenderId).filter(g => !g.injured).sort((a, b) => b.command - a.command)[0] : null;
+  const defStats = effectiveStats(defGeneral);
+  if (defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle === 'function') SKILLS[defGeneral.skill].battle(dMods, aMods);
+
+  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus) * dMods.defMul * dMods.moraleMul;
+  const defEliteCfg = defenderId !== 'neutral' ? getEliteTroop(defenderId) : null;
+  if (defEliteCfg && defArmy) {
+    const ratio = eliteRatio(defArmy, defEliteCfg);
+    defense *= (1 + ratio * (defEliteCfg.def - 1));
+  }
+  defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
+  if (defGeneral) defense *= (0.5 + defStats.command / 200);
+  if (defGeneral && defGeneral.skill === 'lianying') defense *= (1 + SKILLS.lianying.defend);
+  if (getState().eventsTriggered.chibi && attackerId === 'cao' && (targetCity.name === '荆州' || targetCity.name === '扬州') && getState().factions.sun?.allies?.includes('liu')) attack *= 0.7;
+
+  const ratio = attack / (attack + defense || 1);
+  let chance = Math.round(ratio * 100);
+  let hint = '';
+  if (chance >= 75) hint = '胜券在握';
+  else if (chance >= 55) hint = '优势在握';
+  else if (chance >= 45) hint = '胜负难料';
+  else if (chance >= 25) hint = '处于劣势';
+  else hint = '凶多吉少';
+
+  const counterTip = counterFactor(atkShare, defComp) > 0.05 ? '（兵种克制守军）' : (counterFactor(defComp, atkShare) > 0.05 ? '（守军克制你）' : '');
+
+  return {
+    atkPower: Math.round(attack),
+    defPower: Math.round(defense),
+    chance,
+    hint,
+    counterTip,
+    tacticName: tactic.name,
+    water: tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)
+  };
+}
+
 export {
   armyBattle, applyArmyLosses,
   getArmyBondBonus, getFormationMods, applyTroopTraitMods,
-  awardRandomEquipment
+  awardRandomEquipment, estimateBattle
 };

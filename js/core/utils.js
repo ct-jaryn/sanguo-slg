@@ -25,7 +25,7 @@ function setRelation(a,b,v) {
 }
 function factionArmies(fid) { return getState().armies.filter(a=>a.faction===fid); }
 function findArmy(id) { return getState().armies.find(a=>a.id===id); }
-function armyTroopTotal(a) { return a.infantry + a.cavalry + a.archer; }
+function armyTroopTotal(a) { return a.infantry + a.cavalry + a.archer + (a.elite || 0); }
 function availableGenerals(fid, armyId=null) {
   return getState().generals.filter(g=>g.faction===fid && !g.injured && !getState().armies.some(ar=>ar.id!==armyId && ar.generals.includes(g.name)));
 }
