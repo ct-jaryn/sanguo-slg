@@ -146,7 +146,7 @@ function deserializeState(data) {
   if (!state.armies) state.armies = [];
   // Rebuild faction list if huangjin exists
   if (!state.factions.huangjin && state.cities.some(c => c.owner === 'huangjin')) {
-    state.factions.huangjin = { id: 'huangjin', name: '黄巾军', color: '#d4af37', leader: '张角', personality: 'expansion', ai: true, food: 500, gold: 200, troops: 0, morale: 60, allies: [] };
+    state.factions.huangjin = { id: 'huangjin', name: '黄巾军', color: '#d4af37', leader: '张角', personality: 'expansion', ai: true, food: 500, gold: 200, troops: 0, morale: 60, allies: [], tech: JSON.parse(JSON.stringify(DEFAULT_TECH)) };
   }
   // 兼容旧存档：补齐 eliminated 标志与 allies 数组
   Object.values(state.factions).forEach(f => {

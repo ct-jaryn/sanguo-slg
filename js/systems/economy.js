@@ -1,4 +1,4 @@
-import { getState } from '../core/state.js';
+import { getState, DEFAULT_TECH } from '../core/state.js';
 import { log } from '../core/log.js';
 import {
   factionCities, factionArmies, getSeason, relation, setRelation
@@ -32,7 +32,12 @@ function resolveWounds(state) {
   });
 }
 
+function ensureTech(f) {
+  if (!f.tech) f.tech = JSON.parse(JSON.stringify(DEFAULT_TECH));
+}
+
 function resolveCityResources(f, state) {
+  ensureTech(f);
   const cities = factionCities(f.id);
   const diff = f.ai ? DIFFICULTY[state.difficulty || 'normal'] : null;
   const hasTianming = state.generals.some(g => g.faction === f.id && !g.injured && g.skill === 'tianming');

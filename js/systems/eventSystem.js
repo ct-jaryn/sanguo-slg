@@ -1,4 +1,4 @@
-import { getState } from '../core/state.js';
+import { getState, DEFAULT_TECH } from '../core/state.js';
 import { log } from '../core/log.js';
 import {
   getSeason, player, factionCities, factionGenerals, findCity, findGeneral, setRelation
@@ -107,7 +107,7 @@ function historicalEvents() {
     if(free.length){
       const c = free[Math.floor(Math.random()*free.length)];
       c.owner='huangjin'; c.troops=3000; c.morale=50;
-      getState().factions.huangjin = {id:'huangjin',name:'黄巾军',color:'#d4af37',leader:'张角',personality:'expansion',ai:true,food:500,gold:200,troops:0,morale:60,allies:[],eliminated:false};
+      getState().factions.huangjin = {id:'huangjin',name:'黄巾军',color:'#d4af37',leader:'张角',personality:'expansion',ai:true,food:500,gold:200,troops:0,morale:60,allies:[],eliminated:false,tech:JSON.parse(JSON.stringify(DEFAULT_TECH))};
       getState().relations.huangjin={}; Object.keys(getState().factions).forEach(k=>{ if(k==='huangjin'){getState().relations.huangjin.huangjin=100;} else {getState().relations.huangjin[k]=-50;getState().relations[k].huangjin=-50;} });
       log(`黄巾起义爆发！张角占据 ${c.name}，建立黄巾军势力！`);
     }
