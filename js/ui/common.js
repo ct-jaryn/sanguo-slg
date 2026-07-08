@@ -47,17 +47,18 @@ function renderSidebar() {
   const selectedTab = getSelectedTab();
   const sb = document.getElementById('sidebar');
   if (!sb) return;
+  const disabled = state.gameOver ? 'disabled style="opacity:0.5;cursor:not-allowed"' : '';
   sb.innerHTML = tabs.map(t=>{
     let badge = '';
     if(t.id==='events' && pendingCount>0) badge = ` <span style="background:var(--accent-red);color:#fff;border-radius:50%;padding:2px 6px;font-size:0.7rem">${pendingCount}</span>`;
-    return `<button class="${selectedTab===t.id?'active':''}" onclick="appActions.switchTab('${t.id}')">${t.label}${badge}</button>`;
+    return `<button class="${selectedTab===t.id?'active':''}" onclick="appActions.switchTab('${t.id}')" ${disabled}>${t.label}${badge}</button>`;
   }).join('') +
     `<hr style="width:100%;border-color:var(--border)">` +
-    `<button onclick="appActions.saveGame()">保存游戏</button>` +
-    `<button onclick="appActions.exportEncryptedSave()">导出加密存档</button>` +
-    `<button onclick="appActions.promptImportSave()">导入加密存档</button>` +
+    `<button onclick="appActions.saveGame()" ${disabled}>保存游戏</button>` +
+    `<button onclick="appActions.exportEncryptedSave()" ${disabled}>导出加密存档</button>` +
+    `<button onclick="appActions.promptImportSave()" ${disabled}>导入加密存档</button>` +
     `<button onclick="appActions.loadGame()">读取游戏</button>` +
-    `<button onclick="appActions.nextTurn()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">结束回合</button>`;
+    `<button onclick="appActions.nextTurn()" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)" ${disabled}>结束回合</button>`;
 }
 
 function switchTab(id) {

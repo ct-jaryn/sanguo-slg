@@ -130,6 +130,8 @@ function updateRelations(state) {
     if (a.eliminated) return;
     Object.values(state.factions).forEach(b => {
       if (b.eliminated || a.id === b.id) return;
+      // 盟友关系保持稳定，不随机波动
+      if (a.allies.includes(b.id) && b.allies.includes(a.id)) return;
       if (Math.random() < 0.15) {
         setRelation(a.id, b.id, relation(a.id, b.id) + (Math.random() < 0.5 ? -5 : 5));
       }

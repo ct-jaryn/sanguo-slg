@@ -44,7 +44,7 @@ function checkAchievements() {
   newlyUnlocked.forEach(ach => log(`成就解锁：${ach.name} — ${ach.desc}`));
   if (newlyUnlocked.length) {
     playSound('achievement');
-    showAchievementPop(newlyUnlocked[0]);
+    newlyUnlocked.forEach((ach, i) => setTimeout(() => showAchievementPop(ach), i * 400));
   }
   return newlyUnlocked;
 }

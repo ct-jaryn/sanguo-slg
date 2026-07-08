@@ -32,9 +32,10 @@ function doDiplomacy(type,targetId) {
   const p = player();
   const f = state.factions[targetId];
   if (!f || f.eliminated) { log('目标势力不存在或已灭亡'); return; }
-  if(type==='ally' && p.gold>=500 && !p.allies.includes(targetId)){
+  if(type==='ally' && p.gold>=500 && !p.allies.includes(targetId) && !f.allies.includes(state.playerId)){
     p.gold-=500; setRelation(state.playerId,targetId,Math.max(relation(state.playerId,targetId),80));
-    p.allies.push(targetId); f.allies.push(state.playerId);
+    if(!p.allies.includes(targetId)) p.allies.push(targetId);
+    if(!f.allies.includes(state.playerId)) f.allies.push(state.playerId);
     log(`与 ${f.name} 结为盟友，关系提升至盟友级`);
   }else if(type==='trade' && p.food>=200){
     p.food-=200; p.gold+=300; setRelation(state.playerId,targetId,relation(state.playerId,targetId)+10);
@@ -53,9 +54,13 @@ function doDiplomacy(type,targetId) {
     }
   }else if(type==='peace' && p.gold>=300){
     p.gold-=300; setRelation(state.playerId,targetId,20);
+    p.allies = p.allies.filter(id => id !== targetId);
+    f.allies = f.allies.filter(id => id !== state.playerId);
     log(`与 ${f.name} 停战，关系恢复为20`);
   }else if(type==='war'){
     setRelation(state.playerId,targetId,-100);
+    p.allies = p.allies.filter(id => id !== targetId);
+    f.allies = f.allies.filter(id => id !== state.playerId);
     log(`向 ${f.name} 宣战！`);
   }
   renderAll();

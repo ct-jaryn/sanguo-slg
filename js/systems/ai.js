@@ -113,11 +113,12 @@ function aiTurn(f) {
   }
   // Diplomatic AI ally
   if(f.personality==='diplomatic' && Math.random()<0.4){
-    const candidates = Object.values(st.factions).filter(o=>o.id!==f.id && !o.eliminated && relation(f.id,o.id)>30 && !f.allies.includes(o.id));
+    const candidates = Object.values(st.factions).filter(o=>o.id!==f.id && !o.eliminated && relation(f.id,o.id)>30 && !f.allies.includes(o.id) && !o.allies.includes(f.id));
     if(candidates.length){
       const t = candidates[Math.floor(Math.random()*candidates.length)];
-      f.gold-=500; setRelation(f.id,t.id,relation(f.id,t.id)+30);
-      f.allies.push(t.id); t.allies.push(f.id);
+      f.gold-=500; setRelation(f.id,t.id,Math.max(relation(f.id,t.id),80));
+      if(!f.allies.includes(t.id)) f.allies.push(t.id);
+      if(!t.allies.includes(f.id)) t.allies.push(f.id);
       log(`${f.name} 与 ${t.name} 结为盟友`);
     }
   }
