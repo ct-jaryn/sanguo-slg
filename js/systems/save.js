@@ -2,6 +2,7 @@ import { getState, setState, DEFAULT_TECH } from '../core/state.js';
 import { log, setLogState } from '../core/log.js';
 import { SAVE_VERSION, DIFFICULTY } from '../config/constants.js';
 import { EQUIPMENT_POOL } from '../config/equipment.js';
+import { initCityBuildings } from '../config/buildings.js';
 
 const LOCAL_SAVE_KEY = 'sanguo_slg_save';
 const LOCAL_AUTOSAVE_KEY = 'sanguo_slg_autosave';
@@ -153,6 +154,8 @@ function deserializeState(data) {
     if (f.eliminated === undefined) f.eliminated = false;
     if (!Array.isArray(f.allies)) f.allies = [];
   });
+  // 兼容旧存档：补齐城池建筑
+  (state.cities || []).forEach(c => initCityBuildings(c));
   // Ensure relations matrix covers all factions
   const ids = Object.keys(state.factions);
   ids.forEach(a => {

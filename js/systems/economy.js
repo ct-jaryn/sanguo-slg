@@ -4,6 +4,7 @@ import {
   factionCities, factionArmies, getSeason, relation, setRelation
 } from '../core/utils.js';
 import { DIFFICULTY, getCityTraitEffects } from '../config/constants.js';
+import { getCityBuildingEffects } from '../config/buildings.js';
 import { getEliteTroop } from '../config/eliteTroops.js';
 import { POLICIES } from '../config/policies.js';
 import { SKILLS } from '../config/skills.js';
@@ -50,12 +51,13 @@ function resolveCityResources(f, state) {
 
   cities.forEach(c => {
     const traitEffects = getCityTraitEffects(c);
+    const buildingEffects = getCityBuildingEffects(c);
     let fmul = c.morale / 100, gmul = c.morale / 100;
     const season = getSeason();
     if (season === '春') fmul *= 1.2;
     if (season === '秋') fmul *= 1.3;
-    let cityFood = c.food * fmul * traitEffects.foodMul + f.tech.farm.farmBonus;
-    let cityMoney = c.money * gmul * traitEffects.goldMul + f.tech.comm.commBonus;
+    let cityFood = c.food * fmul * traitEffects.foodMul * buildingEffects.foodMul + f.tech.farm.farmBonus;
+    let cityMoney = c.money * gmul * traitEffects.goldMul * buildingEffects.goldMul + f.tech.comm.commBonus;
     if (policy) {
       if (policy.id === 'tuntian') cityFood *= 1.2;
       if (policy.id === 'tuntian') cityMoney *= 0.95;

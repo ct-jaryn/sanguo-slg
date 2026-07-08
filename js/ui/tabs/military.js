@@ -7,6 +7,7 @@ import {
 } from '../../core/utils.js';
 import { FORMATIONS, getCityTraitEffects, TROOP_TYPES, TROOP_MAX_LEVEL } from '../../config/constants.js';
 import { getEliteTroop, eliteCap, eliteUnlocked } from '../../config/eliteTroops.js';
+import { getCityBuildingEffects } from '../../config/buildings.js';
 import { TACTICS } from '../../config/tactics.js';
 import { armyBattle, estimateBattle } from '../../core/battle.js';
 import { showBattleFx, showBattleReport, renderAll, closeModal } from '../common.js';
@@ -183,7 +184,7 @@ function reinforceCity(dir) {
   const city = findCity(cityName);
   if(!city || city.owner!==state.playerId){ alert('请选择己方城池'); return; }
   if(num<100){ alert('数量至少100'); return; }
-  const garrisonCap = 6000 + getCityTraitEffects(city).garrisonCapBonus;
+  const garrisonCap = 6000 + getCityTraitEffects(city).garrisonCapBonus + getCityBuildingEffects(city).garrisonCapBonus;
   if(dir==='in'){
     if(num>p.troops){ alert('预备役兵力不足'); return; }
     if(city.troops+num>garrisonCap){ alert(`超过 ${city.name} 守军上限 ${garrisonCap}`); return; }

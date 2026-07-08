@@ -2,6 +2,7 @@ import { makeGenerals } from '../data/generals.js';
 import { makeCities } from '../data/cities.js';
 import { makeFactions } from '../data/factions.js';
 import { EQUIPMENT_POOL } from '../config/equipment.js';
+import { initCityBuildings } from '../config/buildings.js';
 import { log, setLogState } from './log.js';
 
 const DEFAULT_TECH = {
@@ -18,6 +19,7 @@ function initState() {
   const factions = makeFactions();
   Object.values(factions).forEach(f => { f.tech = JSON.parse(JSON.stringify(DEFAULT_TECH)); });
   const cities = makeCities();
+  cities.forEach(c => initCityBuildings(c));
   const generals = makeGenerals();
   const relations = {};
   const ids = Object.keys(factions);

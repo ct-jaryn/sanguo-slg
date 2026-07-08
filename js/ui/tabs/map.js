@@ -1,6 +1,7 @@
 import { getState } from '../../core/state.js';
 import { findCity, factionCities } from '../../core/utils.js';
 import { CITY_TRAITS } from '../../config/constants.js';
+import { BUILDINGS, getCityBuildingEffects } from '../../config/buildings.js';
 import { switchTab } from '../common.js';
 
 function renderMap(c) {
@@ -31,7 +32,9 @@ function renderMap(c) {
     const owner = ct.owner ? state.factions[ct.owner] : null;
     const ownerMark = owner ? ` [${owner.name.charAt(0)}]` : '';
     const traitNames = (ct.traits || []).map(t => CITY_TRAITS[t]?.name || t).join('、');
-    return `<div class="map-node" data-city="${ct.name}" style="left:${mapX(ct.x)}%;top:${mapY(ct.y)}%" onclick="appActions.switchTab('military')" title="${ct.name} ${traitNames ? '[' + traitNames + '] ' : ''}守军${Math.floor(ct.troops)}">
+    const bld = ct.buildings || {};
+    const bldNames = Object.entries(bld).filter(([k, v]) => v > 0).map(([k, v]) => `${BUILDINGS[k]?.name || k}Lv.${v}`).join(' ');
+    return `<div class="map-node" data-city="${ct.name}" style="left:${mapX(ct.x)}%;top:${mapY(ct.y)}%" onclick="appActions.switchTab('military')" title="${ct.name} ${traitNames ? '[' + traitNames + '] ' : ''}守军${Math.floor(ct.troops)}${bldNames ? ' ' + bldNames : ''}">
       <span class="n-name">${ct.name}${ownerMark}</span>
       <span class="n-troops">守:${Math.floor(ct.troops)} 民:${ct.morale}</span>
     </div>`;
@@ -53,12 +56,14 @@ function renderMap(c) {
       </div>
     </div>
     <div class="card"><h3>城池数据</h3>
-    <table><tr><th>城池</th><th>区域</th><th>特色</th><th>归属</th><th>守军</th><th>城防</th><th>粮食</th><th>金钱</th><th>民心</th></tr>
+    <table><tr><th>城池</th><th>区域</th><th>特色</th><th>归属</th><th>守军</th><th>城防</th><th>粮食</th><th>金钱</th><th>民心</th><th>建筑</th></tr>
     ${state.cities.map(ct=>{
       const ownerFac = ct.owner ? state.factions[ct.owner] : null;
       const owner = ownerFac ? `<span class="faction-dot" style="background:${ownerFac.color}"></span>${ownerFac.name}` : '无主';
       const traitNames = (ct.traits || []).map(t => CITY_TRAITS[t]?.name || t).join('、');
-      return `<tr><td>${ct.name}</td><td>${ct.region}</td><td>${traitNames || '—'}</td><td>${owner}</td><td>${Math.floor(ct.troops)}</td><td>${ct.defense}</td><td>${ct.food}</td><td>${ct.money}</td><td>${ct.morale}</td></tr>`;
+      const bld = ct.buildings || {};
+      const bldNames = Object.entries(bld).filter(([k, v]) => v > 0).map(([k, v]) => `${BUILDINGS[k]?.name || k}Lv.${v}`).join('、') || '—';
+      return `<tr><td>${ct.name}</td><td>${ct.region}</td><td>${traitNames || '—'}</td><td>${owner}</td><td>${Math.floor(ct.troops)}</td><td>${ct.defense}</td><td>${ct.food}</td><td>${ct.money}</td><td>${ct.morale}</td><td>${bldNames}</td></tr>`;
     }).join('')}
     </table></div>
     <div class="card"><h3>势力图例</h3>

@@ -6,7 +6,7 @@ import {
   showTutorialStep, nextTutorialStep, prevTutorialStep, skipTutorial, closeTutorial
 } from './systems/tutorial.js';
 import {
-  doInternal, setDifficulty, setPolicy
+  doInternal, setDifficulty, setPolicy, updateBuildingPanel, doBuildBuilding
 } from './ui/tabs/internal.js';
 import {
   updateAtkTargets, updateAtkPreview, reinforceCity, doArmyAttack, openArmyEditor, saveArmy, disbandArmy
@@ -43,6 +43,8 @@ const appActions = {
   doInternal,
   setDifficulty,
   setPolicy,
+  updateBuildingPanel,
+  doBuildBuilding,
 
   updateAtkTargets,
   updateAtkPreview,

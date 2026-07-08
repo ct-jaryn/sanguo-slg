@@ -5,7 +5,14 @@ import {
 } from '../../core/utils.js';
 import { POLICIES } from '../../config/policies.js';
 import { DIFFICULTY, CITY_TRAITS, getCityTraitEffects } from '../../config/constants.js';
+import { BUILDINGS, getCityBuildingEffects, getBuildingCost } from '../../config/buildings.js';
 import { renderAll } from '../common.js';
+
+function avgTechDiscount() {
+  const cities = factionCities(getState().playerId);
+  if (!cities.length) return 0;
+  return cities.reduce((s, c) => s + getCityBuildingEffects(c).techDiscount, 0) / cities.length;
+}
 
 function renderInternal(c) {
   const state = getState();
@@ -27,10 +34,11 @@ function renderInternal(c) {
     </div>
     <div class="card"><h3>科技树</h3>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
-      <div><b>农业</b> Lv.${tech.farm.level}/${tech.farm.max} 粮产+${tech.farm.farmBonus} <button class="action" onclick="appActions.doInternal('tech_farm')" ${p.gold<500||tech.farm.level>=tech.farm.max?'disabled':''}>升级 (500金)</button></div>
-      <div><b>商业</b> Lv.${tech.comm.level}/${tech.comm.max} 金产+${tech.comm.commBonus} <button class="action" onclick="appActions.doInternal('tech_comm')" ${p.gold<500||tech.comm.level>=tech.comm.max?'disabled':''}>升级 (500金)</button></div>
-      <div><b>军事</b> Lv.${tech.military.level}/${tech.military.max} 招兵+${tech.military.recruitBonus} 攻击+${tech.military.atkBonus}% <button class="action" onclick="appActions.doInternal('tech_military')" ${p.gold<500||tech.military.level>=tech.military.max?'disabled':''}>升级 (500金)</button></div>
-      <div><b>城防</b> Lv.${tech.fort.level}/${tech.fort.max} 城防+${tech.fort.defBonus} <button class="action" onclick="appActions.doInternal('tech_fort')" ${p.gold<500||tech.fort.level>=tech.fort.max?'disabled':''}>升级 (500金)</button></div>
+      ${[['farm','农业','粮产'],['comm','商业','金产'],['military','军事','招兵'],['fort','城防','城防']].map(([k,name,res])=>{
+        const t = tech[k];
+        const cost = Math.floor(500*(1-avgTechDiscount()));
+        return `<div><b>${name}</b> Lv.${t.level}/${t.max} ${res}+${k==='farm'?t.farmBonus:k==='comm'?t.commBonus:k==='military'?t.recruitBonus+' 攻击+'+t.atkBonus+'%':t.defBonus} <button class="action" onclick="appActions.doInternal('tech_${k}')" ${p.gold<cost||t.level>=t.max?'disabled':''}>升级 (${cost}金)</button></div>`;
+      }).join('')}
     </div></div>
     <div class="card"><h3>政策法令</h3>
     <p>每项政策持续生效，切换政策需花费 300 金。</p>
@@ -46,9 +54,19 @@ function renderInternal(c) {
     ${factionCities(state.playerId).map(city=>{
       const traits = (city.traits || []).map(t => CITY_TRAITS[t]?.name || t).join('、');
       const eff = getCityTraitEffects(city);
-      return `<tr><td>${city.name}</td><td>${traits || '—'}</td><td>${Math.floor(city.food * eff.foodMul)}</td><td>${Math.floor(city.money * eff.goldMul)}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td><td>${(city.defense * eff.defMul).toFixed(1)}</td></tr>`;
+      const beff = getCityBuildingEffects(city);
+      return `<tr><td>${city.name}</td><td>${traits || '—'}</td><td>${Math.floor(city.food * eff.foodMul * beff.foodMul)}</td><td>${Math.floor(city.money * eff.goldMul * beff.goldMul)}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td><td>${(city.defense * eff.defMul + beff.defenseBonus).toFixed(1)}</td></tr>`;
     }).join('')}
-    </table></div>`;
+    </table></div>
+    <div class="card"><h3>城池建设</h3>
+    <p>选择城池进行建筑升级，每座城池每种建筑最高 5 级。</p>
+    <div style="margin:8px 0">
+      <label>城池：</label><select id="build-city" onchange="appActions.updateBuildingPanel()">${factionCities(state.playerId).map(c => `<option value="${c.name}">${c.name}</option>`).join('')}</select>
+    </div>
+    <div id="building-panel"></div>
+    </div>`;
+
+  setTimeout(() => updateBuildingPanel(), 0);
 }
 
 function doInternal(type) {
@@ -61,7 +79,7 @@ function doInternal(type) {
     p.gold-=200; cities.forEach(c=>c.money+=12); log('发展商业，各城金钱产出+12');
   }else if(type==='recruit' && p.gold>=150 && p.food>=200){
     p.gold-=150; p.food-=200;
-    const recruitMul = cities.reduce((s, c) => s + getCityTraitEffects(c).recruitMul, 0) / Math.max(1, cities.length);
+    const recruitMul = cities.reduce((s, c) => s + getCityTraitEffects(c).recruitMul * getCityBuildingEffects(c).recruitMul, 0) / Math.max(1, cities.length);
     let add = Math.floor((100+Math.random()*101+p.tech.military.recruitBonus) * recruitMul); if((p.policy || state.policy)==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
   }else if(type==='search' && p.gold>=300){
     p.gold-=300;
@@ -79,15 +97,19 @@ function doInternal(type) {
     p.gold-=150; cities.forEach(c=>c.morale=Math.min(100,c.morale+10)); log('提升民心，各城民心+10');
   }else if(type==='fort' && p.gold>=300){
     p.gold-=300; cities.forEach(c=>{c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2));}); log('加固城防，各城城防+0.1');
-  }else if(type==='tech_farm' && p.gold>=500 && p.tech.farm.level < p.tech.farm.max){
-    p.gold-=500; p.tech.farm.level++; p.tech.farm.farmBonus += 10; log(`农业科技升至 Lv.${p.tech.farm.level}，每城粮产+${p.tech.farm.farmBonus}`);
-  }else if(type==='tech_comm' && p.gold>=500 && p.tech.comm.level < p.tech.comm.max){
-    p.gold-=500; p.tech.comm.level++; p.tech.comm.commBonus += 8; log(`商业科技升至 Lv.${p.tech.comm.level}，每城金产+${p.tech.comm.commBonus}`);
-  }else if(type==='tech_military' && p.gold>=500 && p.tech.military.level < p.tech.military.max){
-    p.gold-=500; p.tech.military.level++; p.tech.military.recruitBonus += 30; p.tech.military.atkBonus += 4; log(`军事科技升至 Lv.${p.tech.military.level}，招兵+${p.tech.military.recruitBonus}，全军攻击+${p.tech.military.atkBonus}%`);
-  }else if(type==='tech_fort' && p.gold>=500 && p.tech.fort.level < p.tech.fort.max){
-    p.gold-=500; p.tech.fort.level++; p.tech.fort.defBonus += 0.1; cities.forEach(c=>{c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2));}); log(`城防科技升至 Lv.${p.tech.fort.level}，城防+${p.tech.fort.defBonus.toFixed(1)}`);
-  }else if(type==='tech' && p.gold>=500){
+  }else if(type==='tech_farm' && p.gold>=Math.floor(500*(1-avgTechDiscount())) && p.tech.farm.level < p.tech.farm.max){
+    const cost = Math.floor(500*(1-avgTechDiscount()));
+    p.gold-=cost; p.tech.farm.level++; p.tech.farm.farmBonus += 10; log(`农业科技升至 Lv.${p.tech.farm.level}，每城粮产+${p.tech.farm.farmBonus}${cost<500?'（书院折扣）':''}`);
+  }else if(type==='tech_comm' && p.gold>=Math.floor(500*(1-avgTechDiscount())) && p.tech.comm.level < p.tech.comm.max){
+    const cost = Math.floor(500*(1-avgTechDiscount()));
+    p.gold-=cost; p.tech.comm.level++; p.tech.comm.commBonus += 8; log(`商业科技升至 Lv.${p.tech.comm.level}，每城金产+${p.tech.comm.commBonus}${cost<500?'（书院折扣）':''}`);
+  }else if(type==='tech_military' && p.gold>=Math.floor(500*(1-avgTechDiscount())) && p.tech.military.level < p.tech.military.max){
+    const cost = Math.floor(500*(1-avgTechDiscount()));
+    p.gold-=cost; p.tech.military.level++; p.tech.military.recruitBonus += 30; p.tech.military.atkBonus += 4; log(`军事科技升至 Lv.${p.tech.military.level}，招兵+${p.tech.military.recruitBonus}，全军攻击+${p.tech.military.atkBonus}%${cost<500?'（书院折扣）':''}`);
+  }else if(type==='tech_fort' && p.gold>=Math.floor(500*(1-avgTechDiscount())) && p.tech.fort.level < p.tech.fort.max){
+    const cost = Math.floor(500*(1-avgTechDiscount()));
+    p.gold-=cost; p.tech.fort.level++; p.tech.fort.defBonus += 0.1; cities.forEach(c=>{c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2));}); log(`城防科技升至 Lv.${p.tech.fort.level}，城防+${p.tech.fort.defBonus.toFixed(1)}${cost<500?'（书院折扣）':''}`);
+  }else if(type==='tech' && p.gold>=Math.floor(500*(1-avgTechDiscount()))){
     // 兼容旧版研发科技：随机升级一个未满的科技
     p.gold-=500; const opts = ['farm','comm','military','fort'].filter(k=>p.tech[k].level<p.tech[k].max);
     if(opts.length){ doInternal(`tech_${opts[Math.floor(Math.random()*opts.length)]}`); return; }
@@ -115,4 +137,50 @@ function setPolicy(pid) {
   renderAll();
 }
 
-export { renderInternal, doInternal, setDifficulty, setPolicy };
+function updateBuildingPanel() {
+  const state = getState();
+  const p = player();
+  const citySel = document.getElementById('build-city');
+  const panel = document.getElementById('building-panel');
+  if (!citySel || !panel) return;
+  const city = factionCities(state.playerId).find(c => c.name === citySel.value);
+  if (!city) { panel.innerHTML = '<p>请选择城池</p>'; return; }
+  const buildings = city.buildings || {};
+  let html = `<table><tr><th>建筑</th><th>等级</th><th>效果</th><th>升级消耗</th><th>操作</th></tr>`;
+  Object.values(BUILDINGS).forEach(cfg => {
+    const lv = buildings[cfg.id] || 0;
+    const maxed = lv >= cfg.maxLevel;
+    const cost = getBuildingCost(cfg.id, lv);
+    const canAfford = cost && p.gold >= cost.gold && p.food >= cost.food;
+    html += `<tr>
+      <td><b>${cfg.name}</b><br/><span style="font-size:0.8rem;color:var(--muted)">${cfg.desc}</span></td>
+      <td>${lv}/${cfg.maxLevel}</td>
+      <td>${lv > 0 ? cfg.effectDesc(lv) : '—'}</td>
+      <td>${maxed ? '已满级' : `${cost.gold}金${cost.food ? ' ' + cost.food + '粮' : ''}`}</td>
+      <td>${maxed ? '—' : `<button class="action" onclick="appActions.doBuildBuilding('${city.name}', '${cfg.id}')" ${canAfford ? '' : 'disabled'}>升级</button>`}</td>
+    </tr>`;
+  });
+  html += `</table>`;
+  panel.innerHTML = html;
+}
+
+function doBuildBuilding(cityName, buildingId) {
+  const state = getState();
+  const p = player();
+  const city = factionCities(state.playerId).find(c => c.name === cityName);
+  if (!city) { alert('城池不存在'); return; }
+  const cfg = BUILDINGS[buildingId];
+  if (!cfg) { alert('建筑不存在'); return; }
+  const lv = (city.buildings && city.buildings[buildingId]) || 0;
+  if (lv >= cfg.maxLevel) { alert('建筑已满级'); return; }
+  const cost = getBuildingCost(buildingId, lv);
+  if (p.gold < cost.gold || p.food < cost.food) { alert('资源不足'); return; }
+  p.gold -= cost.gold;
+  p.food -= cost.food;
+  if (!city.buildings) city.buildings = {};
+  city.buildings[buildingId] = lv + 1;
+  log(`${city.name} 建造 ${cfg.name} 至 Lv.${lv + 1}`);
+  renderAll();
+}
+
+export { renderInternal, doInternal, setDifficulty, setPolicy, updateBuildingPanel, doBuildBuilding };

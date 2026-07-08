@@ -9,6 +9,7 @@ import {
   FORMATIONS, getCityTraitEffects, troopLevelBonus, addTroopXP
 } from '../config/constants.js';
 import { getEliteTroop, eliteRatio } from '../config/eliteTroops.js';
+import { getCityBuildingEffects } from '../config/buildings.js';
 import { BONDS } from '../config/bonds.js';
 import { TACTICS } from '../config/tactics.js';
 import { SKILLS } from '../config/skills.js';
@@ -139,12 +140,14 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
 
   const defFaction = targetCity.owner ? getState().factions[targetCity.owner] : null;
   const fortBonus = defFaction?.tech?.fort?.defBonus || 0;
+  const buildingEffects = getCityBuildingEffects(targetCity);
+  const buildingDefBonus = buildingEffects.defenseBonus || 0;
 
   const defGeneral = defenderId!=='neutral' ? factionGenerals(defenderId).filter(g=>!g.injured).sort((a,b)=>b.command-a.command)[0] : null;
   const defStats = effectiveStats(defGeneral);
   if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
 
-  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus + buildingDefBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
   const defEliteCfg = defenderId !== 'neutral' ? getEliteTroop(defenderId) : null;
   if (defEliteCfg && defArmy) {
     const ratio = eliteRatio(defArmy, defEliteCfg);
@@ -190,7 +193,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     addGeneralExp(mainGeneral, 30);
     if (defGeneral) addGeneralExp(defGeneral, 10);
     [['infantry', army.infantry], ['cavalry', army.cavalry], ['archer', army.archer]].forEach(([type, count]) => { if (count > 0) addTroopXP(army, type, 25); });
-    dropped = awardRandomEquipment();
+    dropped = awardRandomEquipment(targetCity);
     if (dropped) log(`缴获装备：${dropped.name}`);
     log(`${atkFaction.name} 的 ${army.name}(${mainGeneral ? mainGeneral.name : '无将'}) 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
     if (oldOwner && getState().factions[oldOwner] && factionCities(oldOwner).length === 0) log(`${getState().factions[oldOwner].name} 势力灭亡！`);
@@ -276,9 +279,16 @@ function applyTroopTraitMods(army, targetCity, side, mods) {
   }
 }
 
-function awardRandomEquipment() {
+function awardRandomEquipment(city) {
   const pool = getState().equipmentPool.filter(it => !it.owned);
   if (!pool.length) return null;
+  let dropMul = 1;
+  if (city) {
+    const buildingEffects = getCityBuildingEffects(city);
+    dropMul += buildingEffects.dropBonus || 0;
+  }
+  // 基础掉落概率：60%，工坊增加概率
+  if (Math.random() > 0.6 * Math.min(1.5, dropMul)) return null;
   const weights = pool.map(it => it.rarity);
   const total = weights.reduce((a, b) => a + b, 0);
   let r = Math.random() * total;
