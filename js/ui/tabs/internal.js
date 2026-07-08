@@ -34,7 +34,7 @@ function renderInternal(c) {
     </div></div>
     <div class="card"><h3>政策法令</h3>
     <p>每项政策持续生效，切换政策需花费 300 金。</p>
-    ${Object.values(POLICIES).map(pol=>`<button class="action" onclick="appActions.setPolicy('${pol.id}')" ${activePolicy===pol.id?'style="background:var(--accent-green);color:#fff"':''}${p.gold<300&&activePolicy!==pol.id?' disabled':''}>${pol.name}：${pol.desc}</button>`).join('')}
+    ${Object.values(POLICIES).map(pol=>`<button class="action" onclick="appActions.setPolicy('${pol.id}')" ${activePolicy===pol.id?'style="background:var(--accent-green);color:#fff" ':''}${p.gold<300&&activePolicy!==pol.id?'disabled ':''}>${pol.name}：${pol.desc}</button>`).join('')}
     </div>
     <div class="card"><h3>游戏难度</h3>
     <p>当前难度：<b>${DIFFICULTY[state.difficulty||'normal'].name}</b> ${state.turn>1?'（已开始游戏，不可更改）':''}</p>
