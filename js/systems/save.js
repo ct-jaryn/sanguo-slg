@@ -206,9 +206,11 @@ function deserializeState(data) {
     if (g.level === undefined) g.level = 1;
     if (!g.equipment) g.equipment = { weapon: null, armor: null, horse: null };
   });
-  // 兼容旧军团：补齐阵型
+  // 兼容旧军团：补齐阵型、兵种经验与等级
   (state.armies || []).forEach(a => {
     if (!a.formation) a.formation = 'yulin';
+    if (!a.troopXP) a.troopXP = { infantry: 0, cavalry: 0, archer: 0 };
+    if (!a.troopLevel) a.troopLevel = { infantry: 1, cavalry: 1, archer: 1 };
   });
   // 兼容旧存档：将全局政策迁移到玩家势力对象
   if (state.policy && state.factions[state.playerId]) {

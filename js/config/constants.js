@@ -25,6 +25,24 @@ const DIFFICULTY = {
 // 兵种循环克制：骑兵克步兵、步兵克弓兵、弓兵克骑兵
 const COUNTER = { cavalry: 'infantry', infantry: 'archer', archer: 'cavalry' };
 const COUNTER_BONUS = 0.2;
+
+// 兵种经验与等级：每级提升 5% 攻防，最高 5 级
+const TROOP_XP_PER_LEVEL = 100;
+const TROOP_MAX_LEVEL = 5;
+function troopLevelBonus(level) {
+  return 1 + (Math.min(level, TROOP_MAX_LEVEL) - 1) * 0.05;
+}
+function addTroopXP(army, type, amount) {
+  if (!army.troopXP) army.troopXP = { infantry: 0, cavalry: 0, archer: 0 };
+  if (!army.troopLevel) army.troopLevel = { infantry: 1, cavalry: 1, archer: 1 };
+  if (!army.troopXP[type]) army.troopXP[type] = 0;
+  army.troopXP[type] += amount;
+  const needed = TROOP_XP_PER_LEVEL * army.troopLevel[type];
+  while (army.troopLevel[type] < TROOP_MAX_LEVEL && army.troopXP[type] >= needed) {
+    army.troopXP[type] -= needed;
+    army.troopLevel[type]++;
+  }
+}
 // 城池守军兵种构成（按城防：坚城弓兵多利于守城）
 function cityDefenseComp(city) {
   return city.defense >= 1.3
@@ -41,6 +59,37 @@ function counterFactor(atkShare, defShare) {
 // 城池临水判定（用于水战）
 const RIVER_CITIES = ['襄阳','江夏','柴桑','建业','扬州','庐江','长沙','武陵','荆州','永安','江州','广陵','寿春','豫章','桂阳','零陵','会稽','建安'];
 
+// 城市特色：影响产出、防御、募兵、守军上限等
+const CITY_TRAITS = {
+  capital: { name: '帝都', desc: '金钱产出+25%，招兵+20%', goldMul: 1.25, recruitMul: 1.2 },
+  granary: { name: '天府', desc: '粮食产出+30%', foodMul: 1.3 },
+  fortress: { name: '雄关', desc: '城防+25%，守军上限+1000', defMul: 1.25, garrisonCapBonus: 1000 },
+  port: { name: '港口', desc: '水军伤害+15%，金钱产出+10%', waterAtkMul: 1.15, goldMul: 1.1 },
+  commercial: { name: '商都', desc: '金钱产出+20%', goldMul: 1.2 },
+  military: { name: '兵营', desc: '招兵+25%，守军上限+500', recruitMul: 1.25, garrisonCapBonus: 500 },
+  strategic: { name: '要冲', desc: '被进攻时受到的伤害-10%', defenseMul: 0.9 }
+};
+
+function getCityTraitEffects(city) {
+  const traits = city.traits || [];
+  const effects = {
+    foodMul: 1, goldMul: 1, defMul: 1, recruitMul: 1,
+    waterAtkMul: 1, defenseMul: 1, garrisonCapBonus: 0
+  };
+  traits.forEach(t => {
+    const cfg = CITY_TRAITS[t];
+    if (!cfg) return;
+    if (cfg.foodMul) effects.foodMul *= cfg.foodMul;
+    if (cfg.goldMul) effects.goldMul *= cfg.goldMul;
+    if (cfg.defMul) effects.defMul *= cfg.defMul;
+    if (cfg.recruitMul) effects.recruitMul *= cfg.recruitMul;
+    if (cfg.waterAtkMul) effects.waterAtkMul *= cfg.waterAtkMul;
+    if (cfg.defenseMul) effects.defenseMul *= cfg.defenseMul;
+    if (cfg.garrisonCapBonus) effects.garrisonCapBonus += cfg.garrisonCapBonus;
+  });
+  return effects;
+}
+
 // AI 军团编成偏好：根据战术/地理调整步骑弓比例
 const AI_COMP_PREFS = {
   normal: { infantry: 0.55, cavalry: 0.25, archer: 0.20 },
@@ -51,4 +100,4 @@ const AI_COMP_PREFS = {
   cavalry: { infantry: 0.30, cavalry: 0.55, archer: 0.15 }
 };
 
-export { SAVE_VERSION, SEASONS, TROOP_TYPES, FORMATIONS, DIFFICULTY, COUNTER, COUNTER_BONUS, cityDefenseComp, counterFactor, RIVER_CITIES, AI_COMP_PREFS };
+export { SAVE_VERSION, SEASONS, TROOP_TYPES, FORMATIONS, DIFFICULTY, COUNTER, COUNTER_BONUS, cityDefenseComp, counterFactor, RIVER_CITIES, AI_COMP_PREFS, CITY_TRAITS, getCityTraitEffects, TROOP_XP_PER_LEVEL, TROOP_MAX_LEVEL, troopLevelBonus, addTroopXP };

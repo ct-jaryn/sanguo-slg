@@ -4,7 +4,7 @@ import {
   getSeason, player, factionCities, factionGenerals
 } from '../../core/utils.js';
 import { POLICIES } from '../../config/policies.js';
-import { DIFFICULTY } from '../../config/constants.js';
+import { DIFFICULTY, CITY_TRAITS, getCityTraitEffects } from '../../config/constants.js';
 import { renderAll } from '../common.js';
 
 function renderInternal(c) {
@@ -42,8 +42,12 @@ function renderInternal(c) {
     <p style="font-size:0.8rem;color:var(--muted)">简单：AI资源/招兵减少，进攻更谨慎；普通：标准体验；困难：AI资源/招兵增加，进攻更积极。</p>
     </div>
     <div class="card"><h3>城池产出</h3>
-    <table><tr><th>城池</th><th>粮食产出</th><th>金钱产出</th><th>民心</th><th>守军</th><th>城防</th></tr>
-    ${factionCities(state.playerId).map(city=>`<tr><td>${city.name}</td><td>${city.food}</td><td>${city.money}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td><td>${city.defense.toFixed(1)}</td></tr>`).join('')}
+    <table><tr><th>城池</th><th>特色</th><th>粮食产出</th><th>金钱产出</th><th>民心</th><th>守军</th><th>城防</th></tr>
+    ${factionCities(state.playerId).map(city=>{
+      const traits = (city.traits || []).map(t => CITY_TRAITS[t]?.name || t).join('、');
+      const eff = getCityTraitEffects(city);
+      return `<tr><td>${city.name}</td><td>${traits || '—'}</td><td>${Math.floor(city.food * eff.foodMul)}</td><td>${Math.floor(city.money * eff.goldMul)}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td><td>${(city.defense * eff.defMul).toFixed(1)}</td></tr>`;
+    }).join('')}
     </table></div>`;
 }
 
@@ -56,7 +60,9 @@ function doInternal(type) {
   }else if(type==='comm' && p.gold>=200){
     p.gold-=200; cities.forEach(c=>c.money+=12); log('发展商业，各城金钱产出+12');
   }else if(type==='recruit' && p.gold>=150 && p.food>=200){
-    p.gold-=150; p.food-=200; let add = Math.floor(100+Math.random()*101+p.tech.military.recruitBonus); if((p.policy || state.policy)==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
+    p.gold-=150; p.food-=200;
+    const recruitMul = cities.reduce((s, c) => s + getCityTraitEffects(c).recruitMul, 0) / Math.max(1, cities.length);
+    let add = Math.floor((100+Math.random()*101+p.tech.military.recruitBonus) * recruitMul); if((p.policy || state.policy)==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
   }else if(type==='search' && p.gold>=300){
     p.gold-=300;
     if(Math.random()<0.4){

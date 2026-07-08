@@ -136,7 +136,7 @@ function aiTurn(f) {
       const use = Math.min(city.troops, 1500);
       const comp = getOptimalAIComp(f, city, use);
       const gens = pickAIGenerals(f, comp.hint);
-      st.armies.push({id:st.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, formation:comp.formation, infantry:comp.infantry, cavalry:comp.cavalry, archer:comp.archer});
+      st.armies.push({id:st.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, formation:comp.formation, infantry:comp.infantry, cavalry:comp.cavalry, archer:comp.archer, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
       city.troops -= use;
     } else if(stationed.length && city.troops>=300){
       const a = stationed[0];

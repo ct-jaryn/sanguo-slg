@@ -3,7 +3,7 @@ import { log } from '../core/log.js';
 import {
   factionCities, factionArmies, getSeason, relation, setRelation
 } from '../core/utils.js';
-import { DIFFICULTY } from '../config/constants.js';
+import { DIFFICULTY, getCityTraitEffects } from '../config/constants.js';
 import { POLICIES } from '../config/policies.js';
 import { SKILLS } from '../config/skills.js';
 import { aiTurn, aiArmyAttack } from './ai.js';
@@ -47,12 +47,13 @@ function resolveCityResources(f, state) {
   if (policy && policy.id === 'renzheng') moraleDecay *= 0.5;
 
   cities.forEach(c => {
+    const traitEffects = getCityTraitEffects(c);
     let fmul = c.morale / 100, gmul = c.morale / 100;
     const season = getSeason();
     if (season === '春') fmul *= 1.2;
     if (season === '秋') fmul *= 1.3;
-    let cityFood = c.food * fmul + f.tech.farm.farmBonus;
-    let cityMoney = c.money * gmul + f.tech.comm.commBonus;
+    let cityFood = c.food * fmul * traitEffects.foodMul + f.tech.farm.farmBonus;
+    let cityMoney = c.money * gmul * traitEffects.goldMul + f.tech.comm.commBonus;
     if (policy) {
       if (policy.id === 'tuntian') cityFood *= 1.2;
       if (policy.id === 'tuntian') cityMoney *= 0.95;

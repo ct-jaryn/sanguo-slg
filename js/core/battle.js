@@ -6,7 +6,7 @@ import {
 } from './utils.js';
 import {
   TROOP_TYPES, COUNTER_BONUS, cityDefenseComp, counterFactor, RIVER_CITIES,
-  FORMATIONS
+  FORMATIONS, getCityTraitEffects, troopLevelBonus, addTroopXP
 } from '../config/constants.js';
 import { BONDS } from '../config/bonds.js';
 import { TACTICS } from '../config/tactics.js';
@@ -29,9 +29,10 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     targetCity.siegeProgress.turns++;
     const bond = getArmyBondBonus(army);
     const bondMul = bond.mods.forceMul * bond.mods.atkMul;
-    const siegeDamage = Math.floor(total * 0.15 * bondMul);
+    const cityTraits = getCityTraitEffects(targetCity);
+    const siegeDamage = Math.floor(total * 0.15 * bondMul / cityTraits.defMul * cityTraits.defenseMul);
     targetCity.troops = Math.max(0, targetCity.troops - siegeDamage);
-    targetCity.siegeProgress.progress += 25;
+    targetCity.siegeProgress.progress += Math.floor(25 / cityTraits.defMul);
     const losses = Math.floor(total * 0.05 * lossMul);
     applyArmyLosses(army, total, losses);
     addGeneralExp(mainGeneral, 15);
@@ -69,7 +70,8 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   [['infantry',army.infantry],['cavalry',army.cavalry],['archer',army.archer]].forEach(([typeKey,troops])=>{
     if(troops<=0) return;
     const tt = TROOP_TYPES[typeKey];
-    let base = troops * (0.5 + stats.force/200) * (0.5 + stats.command/200) * tt.atk;
+    const lvlBonus = troopLevelBonus(army.troopLevel?.[typeKey] || 1);
+    let base = troops * (0.5 + stats.force/200) * (0.5 + stats.command/200) * tt.atk * lvlBonus;
     if(typeKey==='archer') base *= tt.siegeAtk;
     attack += base;
   });
@@ -101,8 +103,10 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
 
   attack *= aMods.forceMul * aMods.atkMul * tactic.atk;
 
+  const cityTraits = getCityTraitEffects(targetCity);
+
   // 水战加成
-  if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) attack *= 1.25;
+  if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) attack *= 1.25 * cityTraits.waterAtkMul;
 
   // 军事科技攻击加成
   attack *= (1 + (atkFaction?.tech?.military?.atkBonus || 0) / 100);
@@ -112,6 +116,9 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   const defComp = cityDefenseComp(targetCity);
   attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
 
+  // 要冲：被进攻时受到伤害降低
+  attack *= cityTraits.defenseMul;
+
   const defFaction = targetCity.owner ? getState().factions[targetCity.owner] : null;
   const fortBonus = defFaction?.tech?.fort?.defBonus || 0;
 
@@ -119,7 +126,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   const defStats = effectiveStats(defGeneral);
   if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
 
-  let defense = targetCity.troops * 1.2 * (targetCity.defense + fortBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
   defense *= (1 + COUNTER_BONUS * counterFactor(defComp, atkShare));
   if(defGeneral) defense *= (0.5 + defStats.command/200);
   if(defGeneral && defGeneral.skill==='lianying') defense *= (1 + SKILLS.lianying.defend);
@@ -159,6 +166,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     if (mainGeneral && mainGeneral.skill === 'huoji') targetCity.troops = Math.floor(targetCity.troops * (1 - SKILLS.huoji.fire));
     addGeneralExp(mainGeneral, 30);
     if (defGeneral) addGeneralExp(defGeneral, 10);
+    [['infantry', army.infantry], ['cavalry', army.cavalry], ['archer', army.archer]].forEach(([type, count]) => { if (count > 0) addTroopXP(army, type, 25); });
     dropped = awardRandomEquipment();
     if (dropped) log(`缴获装备：${dropped.name}`);
     log(`${atkFaction.name} 的 ${army.name}(${mainGeneral ? mainGeneral.name : '无将'}) 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
@@ -179,6 +187,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     }
     addGeneralExp(mainGeneral, 15);
     if (defGeneral) addGeneralExp(defGeneral, 20);
+    [['infantry', army.infantry], ['cavalry', army.cavalry], ['archer', army.archer]].forEach(([type, count]) => { if (count > 0) addTroopXP(army, type, 10); });
     log(`${atkFaction.name} 的 ${army.name} 进攻 ${targetCity.name} 失败，损失 ${losses} 兵力`);
     report.atkLosses = losses;
     report.defLosses = Math.floor(originalDefTroops * 0.15);

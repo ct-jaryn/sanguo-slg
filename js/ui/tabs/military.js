@@ -5,7 +5,7 @@ import {
   relation, setRelation, factionArmies, findArmy, armyTroopTotal,
   availableGenerals
 } from '../../core/utils.js';
-import { FORMATIONS } from '../../config/constants.js';
+import { FORMATIONS, getCityTraitEffects, TROOP_TYPES, TROOP_MAX_LEVEL } from '../../config/constants.js';
 import { TACTICS } from '../../config/tactics.js';
 import { armyBattle } from '../../core/battle.js';
 import { showBattleFx, showBattleReport, renderAll, closeModal } from '../common.js';
@@ -32,13 +32,19 @@ function renderMilitary(c) {
     myArmies.forEach(a => {
       const main = a.generals.length ? a.generals[0] : '-';
       const form = FORMATIONS[a.formation] || FORMATIONS.yulin;
+      const lvl = a.troopLevel || { infantry: 1, cavalry: 1, archer: 1 };
+      const infName = TROOP_TYPES.infantry.name + (lvl.infantry > 1 ? ` Lv.${lvl.infantry}` : '');
+      const cavName = TROOP_TYPES.cavalry.name + (lvl.cavalry > 1 ? ` Lv.${lvl.cavalry}` : '');
+      const arcName = TROOP_TYPES.archer.name + (lvl.archer > 1 ? ` Lv.${lvl.archer}` : '');
       html += `<tr>
         <td>${a.name}</td>
         <td>${a.city || '待命'}</td>
         <td>${main}</td>
         <td>${a.generals.join(', ') || '-'}</td>
         <td>${form.name}</td>
-        <td>${a.infantry}</td><td>${a.cavalry}</td><td>${a.archer}</td>
+        <td title="${TROOP_TYPES.infantry.traitDesc}">${a.infantry} ${infName}</td>
+        <td title="${TROOP_TYPES.cavalry.traitDesc}">${a.cavalry} ${cavName}</td>
+        <td title="${TROOP_TYPES.archer.traitDesc}">${a.archer} ${arcName}</td>
         <td>${armyTroopTotal(a)}</td>
         <td>
           <button class="action" onclick="appActions.openArmyEditor(${a.id})">调整</button>
@@ -74,7 +80,7 @@ function renderMilitary(c) {
   html += `</div>`;
 
   html += `<div class="card"><h3>城池驻防</h3>`;
-  html += `<p>预备役：${Math.floor(p.troops)} · 单城守军上限 6000</p>`;
+  html += `<p>预备役：${Math.floor(p.troops)} · 单城守军上限因城池特色而异</p>`;
   if (pcities.length === 0) {
     html += `<p>无可驻防城池。</p>`;
   } else {
@@ -145,9 +151,10 @@ function reinforceCity(dir) {
   const city = findCity(cityName);
   if(!city || city.owner!==state.playerId){ alert('请选择己方城池'); return; }
   if(num<100){ alert('数量至少100'); return; }
+  const garrisonCap = 6000 + getCityTraitEffects(city).garrisonCapBonus;
   if(dir==='in'){
     if(num>p.troops){ alert('预备役兵力不足'); return; }
-    if(city.troops+num>6000){ alert('超过单城守军上限 6000'); return; }
+    if(city.troops+num>garrisonCap){ alert(`超过 ${city.name} 守军上限 ${garrisonCap}`); return; }
     p.troops -= num; city.troops += num;
     log(`调 ${num} 兵力驻防 ${city.name}，守军达 ${Math.floor(city.troops)}`);
   }else{
@@ -224,7 +231,7 @@ function openArmyEditor(armyId=null) {
     <div style="margin:8px 0"><label>步兵：</label><input type="number" id="army-infantry" value="${army?army.infantry:0}" min="0" step="100" style="width:80px"></div>
     <div style="margin:8px 0"><label>骑兵：</label><input type="number" id="army-cavalry" value="${army?army.cavalry:0}" min="0" step="100" style="width:80px"></div>
     <div style="margin:8px 0"><label>弓兵：</label><input type="number" id="army-archer" value="${army?army.archer:0}" min="0" step="100" style="width:80px"></div>
-    <p>可用兵力：${Math.floor(p.troops)} · 预计消耗：步兵1粮/百、骑兵1.5粮/百、弓兵1.1粮/百（按季节结算）</p>
+    <p>可用兵力：${Math.floor(p.troops)} · 兵种特技：步兵-${TROOP_TYPES.infantry.traitDesc} 骑兵-${TROOP_TYPES.cavalry.traitDesc} 弓兵-${TROOP_TYPES.archer.traitDesc}</p>
     <div style="margin-top:12px"><button class="action" onclick="appActions.saveArmy(${armyId||'null'})" style="background:var(--accent-green);color:#fff;border-color:var(--accent-green)">保存</button>
     <button class="action" onclick="appActions.closeModal()">取消</button></div>
   `;
@@ -252,10 +259,12 @@ function saveArmy(armyId) {
     p.troops += armyTroopTotal(army);
     army.name = name; army.city = city; army.generals = gens; army.formation = formation;
     army.infantry = infantry; army.cavalry = cavalry; army.archer = archer;
+    if (!army.troopXP) army.troopXP = { infantry: 0, cavalry: 0, archer: 0 };
+    if (!army.troopLevel) army.troopLevel = { infantry: 1, cavalry: 1, archer: 1 };
     p.troops -= total;
     log(`调整军团 ${name}，总兵力 ${total}`);
   }else{
-    state.armies.push({id:state.nextArmyId++, faction:state.playerId, name, city, generals:gens, formation, infantry, cavalry, archer});
+    state.armies.push({id:state.nextArmyId++, faction:state.playerId, name, city, generals:gens, formation, infantry, cavalry, archer, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
     p.troops -= total;
     log(`组建军团 ${name}，总兵力 ${total}`);
   }
