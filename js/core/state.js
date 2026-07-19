@@ -20,6 +20,8 @@ function initState() {
   Object.values(factions).forEach(f => { f.tech = JSON.parse(JSON.stringify(DEFAULT_TECH)); });
   const cities = makeCities();
   cities.forEach(c => initCityBuildings(c));
+  // 记录玩家开局城数，任务/成就的攻城条件以此为基准（旧档无此字段时按 0 兜底）
+  const startCityCount = cities.filter(c => c.owner === 'liu').length;
   const generals = makeGenerals();
   const relations = {};
   const ids = Object.keys(factions);
@@ -29,6 +31,7 @@ function initState() {
     relations,
     year: 1, month: 1, turn: 1,
     playerId: 'liu',
+    startCityCount,
     logs: [],
     gameOver: false,
     winner: null,

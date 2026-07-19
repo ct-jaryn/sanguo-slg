@@ -1,22 +1,25 @@
 import { getState, DEFAULT_TECH } from '../core/state.js';
 import {
   availableGenerals, factionCities, findCity, getSeason,
-  relation, setRelation, player
+  relation, setRelation, player, removeGeneralFromArmies
 } from '../core/utils.js';
 import { RIVER_CITIES } from './constants.js';
 
+// 粮/金类事件效果一律作用于势力库存（faction.food/gold）。
+// 曾误改城市每回合基础产出（city.food/city.money，economy.js 按产出×系数计入库存），
+// 导致城市产出无限膨胀；相关数值已按「原每回合产出×10」换算为一次性库存增减。
 const EVENTS = [
   {
     id:'harvest', title:'丰收', type:'auto', weight:2,
     condition:()=>true,
     desc:(ctx)=>`${ctx.city.name} 风调雨顺，粮食丰收。`,
-    effect:(ctx)=>{ ctx.city.food += 30+Math.floor(Math.random()*21); ctx.city.morale = Math.min(100, ctx.city.morale+5); }
+    effect:(ctx)=>{ ctx.faction.food += 300+Math.floor(Math.random()*201); ctx.city.morale = Math.min(100, ctx.city.morale+5); }
   },
   {
     id:'famine', title:'饥荒', type:'auto', weight:1.5,
     condition:()=>true,
     desc:(ctx)=>`${ctx.city.name} 遭遇饥荒，民不聊生。`,
-    effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-40); ctx.city.morale = Math.max(20, ctx.city.morale-10); }
+    effect:(ctx)=>{ ctx.faction.food = Math.max(0, ctx.faction.food-400); ctx.city.morale = Math.max(20, ctx.city.morale-10); }
   },
   {
     id:'plague', title:'瘟疫', type:'auto', weight:1,
@@ -28,11 +31,11 @@ const EVENTS = [
     id:'bandits', title:'山贼袭扰', type:'auto', weight:1.5,
     condition:()=>true,
     desc:(ctx)=>`${ctx.city.name} 周边山贼袭扰，守军疲于应付。`,
-    effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-150-Math.floor(Math.random()*100)); ctx.city.money = Math.max(0, ctx.city.money-20); }
+    effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-150-Math.floor(Math.random()*100)); ctx.faction.gold = Math.max(0, ctx.faction.gold-200); }
   },
   {
     id:'merchant', title:'商旅云集', type:'choice', weight:1.2,
-    condition:(ctx)=>ctx.faction.gold>=100,
+    condition:(ctx)=>ctx.faction.gold>=200,
     desc:(ctx)=>`商旅路过 ${ctx.city.name}，愿以粮食换金钱。`,
     choices:[
       {label:'交易（200金换300粮）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food+=300; return '你购买了粮食。'; }},
@@ -63,7 +66,7 @@ const EVENTS = [
     },
     desc:(ctx)=>{ ctx.general = getState().generals.filter(g=>g.faction!=='free' && g.faction!==ctx.faction.id && g.loyalty<50)[0]; return `${ctx.general.name} 有意脱离 ${getState().factions[ctx.general.faction].name} 投奔于你。`; },
     choices:[
-      {label:'接纳（500金）', condition:(ctx)=>ctx.faction.gold>=500, effect:(ctx)=>{ ctx.faction.gold-=500; ctx.general.faction=ctx.faction.id; ctx.general.loyalty=70; return `${ctx.general.name} 已加入麾下。`; }},
+      {label:'接纳（500金）', condition:(ctx)=>ctx.faction.gold>=500, effect:(ctx)=>{ ctx.faction.gold-=500; removeGeneralFromArmies(ctx.general.name); ctx.general.faction=ctx.faction.id; ctx.general.loyalty=70; return `${ctx.general.name} 已加入麾下。`; }},
       {label:'送还', effect:(ctx)=>{ setRelation(ctx.faction.id, ctx.general.faction, relation(ctx.faction.id, ctx.general.faction)+10); return `你送还 ${ctx.general.name}，双方关系缓和。`; }}
     ]
   },
@@ -107,7 +110,7 @@ const EVENTS = [
     choices:[
       {label:'派兵征讨', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-300); return '你击退了蛮族，但守军受损。'; }},
       {label:'缴纳岁币（400金）', condition:(ctx)=>ctx.faction.gold>=400, effect:(ctx)=>{ ctx.faction.gold-=400; return '蛮族拿着财物退走。'; }},
-      {label:'放任', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-500); ctx.city.money = Math.max(0, ctx.city.money-50); return '蛮族劫掠后离去。'; }}
+      {label:'放任', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-500); ctx.faction.gold = Math.max(0, ctx.faction.gold-500); return '蛮族劫掠后离去。'; }}
     ]
   },
   {
@@ -116,7 +119,7 @@ const EVENTS = [
     desc:(ctx)=>`${ctx.city.name} 数月无雨，田地龟裂，民怨渐起。`,
     choices:[
       {label:'开仓赈灾（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.city.morale = Math.min(100, ctx.city.morale+10); return '开仓赈灾，民心稳定。'; }},
-      {label:'祈雨祭祀（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.food = Math.max(0, ctx.city.food-20); return '祭祀后微雨落下，灾情稍缓。'; }},
+      {label:'祈雨祭祀（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food = Math.max(0, ctx.faction.food-200); return '祭祀后微雨落下，灾情稍缓。'; }},
       {label:'强征赋税', effect:(ctx)=>{ ctx.city.morale = Math.max(20, ctx.city.morale-15); ctx.faction.gold += 100; return '强征赋税，民怨沸腾。'; }}
     ]
   },
@@ -156,7 +159,7 @@ const EVENTS = [
     choices:[
       {label:'派兵清剿（200兵）', condition:(ctx)=>ctx.faction.troops>=200, effect:(ctx)=>{ ctx.faction.troops-=200; ctx.faction.gold += 100; return '清剿山贼，缴获财物。'; }},
       {label:'悬赏缉拿（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.morale = Math.min(100, ctx.city.morale+5); return '悬赏一出，山贼首级送到。'; }},
-      {label:'闭门不出', effect:(ctx)=>{ ctx.city.money = Math.max(0, ctx.city.money-30); return '商队被劫，城市收入受损。'; }}
+      {label:'闭门不出', effect:(ctx)=>{ ctx.faction.gold = Math.max(0, ctx.faction.gold-300); return '商队被劫，城市收入受损。'; }}
     ]
   },
   {
@@ -166,7 +169,7 @@ const EVENTS = [
     choices:[
       {label:'焚毁山寨（500兵）', condition:(ctx)=>ctx.faction.troops>=500, effect:(ctx)=>{ ctx.faction.troops-=500; ctx.faction.gold += 300; return '焚毁山寨，缴获大量财物。'; }},
       {label:'招安为兵（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; ctx.city.troops += 300; return '山贼受招安，编入守军。'; }},
-      {label:'放任不管', effect:(ctx)=>{ ctx.city.money = Math.max(0, ctx.city.money-20); ctx.city.morale = Math.max(20, ctx.city.morale-5); return '山贼继续为患，商旅减少。'; }}
+      {label:'放任不管', effect:(ctx)=>{ ctx.faction.gold = Math.max(0, ctx.faction.gold-200); ctx.city.morale = Math.max(20, ctx.city.morale-5); return '山贼继续为患，商旅减少。'; }}
     ]
   },
   {
@@ -208,7 +211,7 @@ const EVENTS = [
     },
     desc:(ctx)=>{ ctx.general = getState().generals.filter(g=>g.faction!=='free' && g.faction!==ctx.faction.id && g.loyalty<50)[0]; return `${ctx.general.name} 对 ${getState().factions[ctx.general.faction].name} 心生不满，似有来投之意。`; },
     choices:[
-      {label:'接纳（500金）', condition:(ctx)=>ctx.faction.gold>=500, effect:(ctx)=>{ ctx.faction.gold-=500; ctx.general.faction=ctx.faction.id; ctx.general.loyalty=70; return `${ctx.general.name} 已加入麾下。`; }},
+      {label:'接纳（500金）', condition:(ctx)=>ctx.faction.gold>=500, effect:(ctx)=>{ ctx.faction.gold-=500; removeGeneralFromArmies(ctx.general.name); ctx.general.faction=ctx.faction.id; ctx.general.loyalty=70; return `${ctx.general.name} 已加入麾下。`; }},
       {label:'送还', effect:(ctx)=>{ setRelation(ctx.faction.id, ctx.general.faction, relation(ctx.faction.id, ctx.general.faction)+10); return `你送还 ${ctx.general.name}，双方关系缓和。`; }}
     ]
   },
@@ -218,7 +221,7 @@ const EVENTS = [
     desc:(ctx)=>`连年灾荒，大批流民涌入 ${ctx.city.name}。`,
     choices:[
       {label:'妥善安置（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.city.troops += 200; return '流民编入守军，城池安定。'; }},
-      {label:'招募屯田（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.food += 20; return '流民垦荒，粮产增加。'; }},
+      {label:'招募屯田（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food += 200; return '流民垦荒，粮产增加。'; }},
       {label:'驱赶', effect:(ctx)=>{ ctx.city.morale = Math.max(20, ctx.city.morale-15); return '流民被驱赶，怨声载道。'; }}
     ]
   },
@@ -226,7 +229,7 @@ const EVENTS = [
     id:'season_spring', title:'春耕', type:'auto', weight:0, season:'春',
     condition:(ctx)=>getSeason()==='春',
     desc:(ctx)=>`春意盎然，${ctx.city.name} 忙于春耕，粮产增加。`,
-    effect:(ctx)=>{ ctx.faction.food += 30 + Math.floor(Math.random()*21); ctx.city.food += 10; }
+    effect:(ctx)=>{ ctx.faction.food += 30 + Math.floor(Math.random()*21); ctx.faction.food += 100; }
   },
   {
     id:'season_summer', title:'酷暑', type:'auto', weight:0, season:'夏',
@@ -238,7 +241,7 @@ const EVENTS = [
     id:'season_autumn', title:'秋收', type:'auto', weight:0, season:'秋',
     condition:(ctx)=>getSeason()==='秋',
     desc:(ctx)=>`秋高气爽，${ctx.city.name} 粮仓渐满。`,
-    effect:(ctx)=>{ ctx.faction.food += 50 + Math.floor(Math.random()*31); ctx.city.food += 15; }
+    effect:(ctx)=>{ ctx.faction.food += 50 + Math.floor(Math.random()*31); ctx.faction.food += 150; }
   },
   {
     id:'season_winter', title:'冬寒', type:'auto', weight:0, season:'冬',
@@ -251,9 +254,9 @@ const EVENTS = [
     condition:(ctx)=>getSeason()==='春' && RIVER_CITIES.includes(ctx.city.name),
     desc:(ctx)=>`${ctx.city.name} 河水上涨，春汛来临。`,
     choices:[
-      {label:'加固堤防（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.food += 10; return '堤防加固，粮产增加。'; }},
-      {label:'疏浚河道（300兵）', condition:(ctx)=>ctx.faction.troops>=300, effect:(ctx)=>{ ctx.faction.troops-=300; ctx.city.money += 20; return '河道疏通，商业受益。'; }},
-      {label:'放任', effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-20); ctx.city.money = Math.max(0, ctx.city.money-15); return '春汛泛滥，粮产与收入受损。'; }}
+      {label:'加固堤防（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food += 100; return '堤防加固，粮产增加。'; }},
+      {label:'疏浚河道（300兵）', condition:(ctx)=>ctx.faction.troops>=300, effect:(ctx)=>{ ctx.faction.troops-=300; ctx.faction.gold += 200; return '河道疏通，商业受益。'; }},
+      {label:'放任', effect:(ctx)=>{ ctx.faction.food = Math.max(0, ctx.faction.food-200); ctx.faction.gold = Math.max(0, ctx.faction.gold-150); return '春汛泛滥，粮产与收入受损。'; }}
     ]
   },
   {
@@ -261,9 +264,9 @@ const EVENTS = [
     condition:(ctx)=>getSeason()==='夏' && Math.random()<0.5,
     desc:(ctx)=>`${ctx.city.name} 久旱无雨，禾苗枯萎。`,
     choices:[
-      {label:'开渠引水（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; ctx.city.food = Math.max(0, ctx.city.food-10); return '引水灌溉，旱情缓解。'; }},
+      {label:'开渠引水（300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; ctx.faction.food = Math.max(0, ctx.faction.food-100); return '引水灌溉，旱情缓解。'; }},
       {label:'开仓赈济（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.city.morale = Math.min(100, ctx.city.morale+5); return '赈济灾民，民心稳定。'; }},
-      {label:'听天由命', effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-40); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '旱灾严重，粮产与民心大损。'; }}
+      {label:'听天由命', effect:(ctx)=>{ ctx.faction.food = Math.max(0, ctx.faction.food-400); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '旱灾严重，粮产与民心大损。'; }}
     ]
   },
   {
@@ -272,7 +275,7 @@ const EVENTS = [
     desc:(ctx)=>`${ctx.city.name} 秋收喜人，商贾云集。`,
     choices:[
       {label:'征税（金钱+300）', effect:(ctx)=>{ ctx.faction.gold += 300; ctx.city.morale = Math.max(20, ctx.city.morale-5); return '征收商税，民心稍降。'; }},
-      {label:'免税促市', effect:(ctx)=>{ ctx.city.money += 30; ctx.city.morale = Math.min(100, ctx.city.morale+10); return '免税让商贾云集，民心提升。'; }},
+      {label:'免税促市', effect:(ctx)=>{ ctx.faction.gold += 300; ctx.city.morale = Math.min(100, ctx.city.morale+10); return '免税让商贾云集，民心提升。'; }},
       {label:'收购军粮（200金换400粮）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food+=400; return '收购军粮，备战充足。'; }}
     ]
   },
@@ -282,7 +285,7 @@ const EVENTS = [
     desc:(ctx)=>`${ctx.city.name} 大雪封城，民夫冻伤。`,
     choices:[
       {label:'发放冬衣（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.morale = Math.min(100, ctx.city.morale+10); return '冬衣发放，民心安定。'; }},
-      {label:'征调民夫清雪（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.city.money += 20; return '道路疏通，商业恢复。'; }},
+      {label:'征调民夫清雪（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.faction.gold += 200; return '道路疏通，商业恢复。'; }},
       {label:'置之不顾', effect:(ctx)=>{ ctx.city.troops = Math.max(0, ctx.city.troops-100); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '积雪成灾，守军与民心受损。'; }}
     ]
   },
@@ -292,7 +295,7 @@ const EVENTS = [
     desc:'曹操邀刘备青梅煮酒，论天下英雄。',
     choices:[
       {label:'谦辞推托', effect:(ctx)=>{ setRelation('liu','cao', relation('liu','cao')+20); getState().eventsTriggered.cookingWine=true; return '刘备谦辞，曹操释然，双方关系缓和。'; }},
-      {label:'豪言以对', effect:(ctx)=>{ setRelation('liu','cao', relation('liu','cao')-40); player().morale = Math.min(100, player().morale+10); getState().eventsTriggered.cookingWine=true; return '刘备豪言震座，曹操心生忌惮，刘备声望提升。'; }}
+      {label:'豪言以对', effect:(ctx)=>{ setRelation('liu','cao', relation('liu','cao')-40); player().morale = Math.min(100, player().morale+10); getState().eventsTriggered.cookingWine=true; return '刘备豪言震座，曹操心生忌惮，刘备军士气提升。'; }}
     ]
   },
   {
@@ -310,7 +313,7 @@ const EVENTS = [
     desc:'关羽失荆州后，刘备誓要东征孙权。',
     choices:[
       {label:'举兵复仇（与孙吴决裂）', effect:(ctx)=>{ setRelation('liu','sun',-100); getState().eventsTriggered.yiling=true; return '刘备兴兵伐吴，孙刘联盟破裂。'; }},
-      {label:'以和为贵（赔款300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; setRelation('liu','sun',20); getState().eventsTriggered.yiling=true; return '刘备隐忍，孙刘重修旧好。'; }}
+      {label:'以和为贵（赔款300金）', condition:(ctx)=>ctx.faction.gold>=300, effect:(ctx)=>{ ctx.faction.gold-=300; setRelation('liu','sun',60); getState().eventsTriggered.yiling=true; return '刘备隐忍，孙刘重修旧好。'; }}
     ]
   },
   {
@@ -328,8 +331,8 @@ const EVENTS = [
     desc:(ctx)=>`${ctx.city.name} 暴雨连绵，河水暴涨，农田被淹。`,
     choices:[
       {label:'开仓赈灾（300粮）', condition:(ctx)=>ctx.faction.food>=300, effect:(ctx)=>{ ctx.faction.food-=300; ctx.city.morale = Math.min(100, ctx.city.morale+5); return '赈灾及时，民心稳定。'; }},
-      {label:'抢修堤坝（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.food = Math.max(0, ctx.city.food-10); return '堤坝修复，灾情稍缓。'; }},
-      {label:'听天由命', effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-40); ctx.city.money = Math.max(0, ctx.city.money-20); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '洪涝成灾，粮产与民心大损。'; }}
+      {label:'抢修堤坝（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food = Math.max(0, ctx.faction.food-100); return '堤坝修复，灾情稍缓。'; }},
+      {label:'听天由命', effect:(ctx)=>{ ctx.faction.food = Math.max(0, ctx.faction.food-400); ctx.faction.gold = Math.max(0, ctx.faction.gold-200); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '洪涝成灾，粮产与民心大损。'; }}
     ]
   },
   {
@@ -337,9 +340,9 @@ const EVENTS = [
     condition:(ctx)=>getSeason()==='秋',
     desc:(ctx)=>`${ctx.city.name} 蝗虫过境，遮天蔽日，秋收无望。`,
     choices:[
-      {label:'组织扑蝗（300兵）', condition:(ctx)=>ctx.faction.troops>=300, effect:(ctx)=>{ ctx.faction.troops-=300; ctx.city.food = Math.max(0, ctx.city.food-15); return '军民协力扑灭蝗虫，损失较小。'; }},
-      {label:'祈祷消灾（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.city.food = Math.max(0, ctx.city.food-25); return '祭祀之后蝗群散去，仍有部分损失。'; }},
-      {label:'放任', effect:(ctx)=>{ ctx.city.food = Math.max(0, ctx.city.food-50); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '蝗灾肆虐，粮产锐减。'; }}
+      {label:'组织扑蝗（300兵）', condition:(ctx)=>ctx.faction.troops>=300, effect:(ctx)=>{ ctx.faction.troops-=300; ctx.faction.food = Math.max(0, ctx.faction.food-150); return '军民协力扑灭蝗虫，损失较小。'; }},
+      {label:'祈祷消灾（200金）', condition:(ctx)=>ctx.faction.gold>=200, effect:(ctx)=>{ ctx.faction.gold-=200; ctx.faction.food = Math.max(0, ctx.faction.food-250); return '祭祀之后蝗群散去，仍有部分损失。'; }},
+      {label:'放任', effect:(ctx)=>{ ctx.faction.food = Math.max(0, ctx.faction.food-500); ctx.city.morale = Math.max(20, ctx.city.morale-10); return '蝗灾肆虐，粮产锐减。'; }}
     ]
   },
   {

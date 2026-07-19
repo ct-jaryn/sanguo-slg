@@ -8,6 +8,8 @@ function checkEliminations() {
     if (factionCities(f.id).length === 0) {
       // 失去所有城池即灭亡：残余军团兵力归零并清理，避免幽灵军团卡住武将
       getState().armies = getState().armies.filter(a => a.faction !== f.id);
+      // 残余武将在野，可被寻访招募
+      getState().generals.forEach(g => { if (g.faction === f.id) { g.faction = 'free'; g.loyalty = 60; } });
       f.eliminated = true;
       f.ai = false;
       f.troops = 0;
@@ -19,20 +21,22 @@ function checkEliminations() {
 }
 
 function checkVictory() {
+  // 历史事件（三国归晋/30 年僵局）可能已置 gameOver，不再覆盖其结局
+  if (getState().gameOver) return;
   const p = player();
   const total = getState().cities.length;
   const mine = factionCities(getState().playerId).length;
-  if (mine >= Math.ceil(total * 0.85)) {
+  const allEnemiesDown = Object.values(getState().factions).every(f => f.id === getState().playerId || f.eliminated);
+  if (mine >= Math.ceil(total * 0.85) || allEnemiesDown) {
     getState().gameOver = true;
     getState().winner = getState().playerId;
     getState().endingTitle = '统一天下：你赢得了胜利！';
     log(getState().endingTitle);
     return;
   }
-  // 灭亡判定：无城池且无可作战军团（含预备役+军团兵力）才判负
+  // 灭亡判定：城全丢且预备役也为 0、无可作战军团才判负
   const armyTotal = factionArmies(getState().playerId).reduce((s, a) => s + armyTroopTotal(a), 0);
-  const allForces = p.troops + factionCities(getState().playerId).reduce((s, c) => s + c.troops, 0) + armyTotal;
-  if ((mine === 0 && armyTotal === 0) || (mine === 0 && p.food <= 0 && p.gold <= 0 && allForces <= 0)) {
+  if (mine === 0 && p.troops === 0 && armyTotal === 0) {
     getState().gameOver = true;
     getState().winner = null;
     getState().endingTitle = '你的势力覆灭了。';

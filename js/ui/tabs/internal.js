@@ -8,6 +8,9 @@ import { DIFFICULTY, CITY_TRAITS, getCityTraitEffects } from '../../config/const
 import { BUILDINGS, getCityBuildingEffects, getBuildingCost } from '../../config/buildings.js';
 import { renderAll } from '../common.js';
 
+// 每城开发等级上限（开垦/商业共用），防止无限叠加产出
+const DEV_MAX = 10;
+
 function avgTechDiscount() {
   const cities = factionCities(getState().playerId);
   if (!cities.length) return 0;
@@ -21,12 +24,18 @@ function renderInternal(c) {
   const tech = p.tech;
   const activePolicy = p.policy || state.policy;
   const policyName = activePolicy ? POLICIES[activePolicy].name : '无';
+  const myCities = factionCities(state.playerId);
+  // 开垦/商业：所有城开发等级均达上限后禁用
+  const devMaxed = myCities.length > 0 && myCities.every(city => (city.devLv || 0) >= DEV_MAX);
+  // 招兵：无城池或预备役达到上限（城数*3000，与回合末截断口径一致）时禁用
+  const troopCap = myCities.length * 3000;
+  const recruitBlocked = myCities.length === 0 || p.troops >= troopCap;
   c.innerHTML = `
     <div class="card"><h3>内政中心 · 当前季节：${season}</h3>
     <p>拥有城池：${factionCities(state.playerId).length}座 · 武将：${factionGenerals(state.playerId).length}人 · 当前政策：${policyName}</p>
-    <button class="action" onclick="appActions.doInternal('farm')" ${p.gold<200?'disabled':''}>开垦农田 (200金)</button>
-    <button class="action" onclick="appActions.doInternal('comm')" ${p.gold<200?'disabled':''}>发展商业 (200金)</button>
-    <button class="action" onclick="appActions.doInternal('recruit')" ${p.gold<150||p.food<200?'disabled':''}>招兵买马 (150金+200粮)</button>
+    <button class="action" onclick="appActions.doInternal('farm')" ${p.gold<200||devMaxed?'disabled':''}>开垦农田 (200金)${devMaxed?'（开发已达上限）':''}</button>
+    <button class="action" onclick="appActions.doInternal('comm')" ${p.gold<200||devMaxed?'disabled':''}>发展商业 (200金)${devMaxed?'（开发已达上限）':''}</button>
+    <button class="action" onclick="appActions.doInternal('recruit')" ${p.gold<150||p.food<200||recruitBlocked?'disabled':''}>招兵买马 (150金+200粮)${recruitBlocked?`（预备役上限${troopCap}）`:''}</button>
     <button class="action" onclick="appActions.doInternal('search')" ${p.gold<300?'disabled':''}>寻访人才 (300金)</button>
     <button class="action" onclick="appActions.doInternal('heal')" ${p.gold<200||!factionGenerals(state.playerId).some(g=>g.injured)?'disabled':''}>医治伤员 (200金)</button>
     <button class="action" onclick="appActions.doInternal('morale')" ${p.gold<150?'disabled':''}>提升民心 (150金)</button>
@@ -55,7 +64,7 @@ function renderInternal(c) {
       const traits = (city.traits || []).map(t => CITY_TRAITS[t]?.name || t).join('、');
       const eff = getCityTraitEffects(city);
       const beff = getCityBuildingEffects(city);
-      return `<tr><td>${city.name}</td><td>${traits || '—'}</td><td>${Math.floor(city.food * eff.foodMul * beff.foodMul)}</td><td>${Math.floor(city.money * eff.goldMul * beff.goldMul)}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td><td>${(city.defense * eff.defMul + beff.defenseBonus).toFixed(1)}</td></tr>`;
+      return `<tr><td>${city.name}</td><td>${traits || '—'}</td><td>${Math.floor(city.food * eff.foodMul * beff.foodMul)}</td><td>${Math.floor(city.money * eff.goldMul * beff.goldMul)}</td><td>${city.morale}</td><td>${Math.floor(city.troops)}</td><td>${(city.defense * eff.defMul + tech.fort.defBonus + beff.defenseBonus).toFixed(1)}</td></tr>`;
     }).join('')}
     </table></div>
     <div class="card"><h3>城池建设</h3>
@@ -74,10 +83,17 @@ function doInternal(type) {
   const p = player();
   const cities = factionCities(state.playerId);
   if(type==='farm' && p.gold>=200){
-    p.gold-=200; cities.forEach(c=>c.food+=15); log('开垦农田，各城粮食产出+15');
+    const devCities = cities.filter(c=>(c.devLv||0)<DEV_MAX);
+    if(!devCities.length){ log('各城开发已达上限，无法继续开垦'); renderAll(); return; }
+    p.gold-=200; devCities.forEach(c=>{c.food+=15; c.devLv=(c.devLv||0)+1;}); log('开垦农田，各城粮食产出+15');
   }else if(type==='comm' && p.gold>=200){
-    p.gold-=200; cities.forEach(c=>c.money+=12); log('发展商业，各城金钱产出+12');
+    const devCities = cities.filter(c=>(c.devLv||0)<DEV_MAX);
+    if(!devCities.length){ log('各城开发已达上限，无法继续发展商业'); renderAll(); return; }
+    p.gold-=200; devCities.forEach(c=>{c.money+=12; c.devLv=(c.devLv||0)+1;}); log('发展商业，各城金钱产出+12');
   }else if(type==='recruit' && p.gold>=150 && p.food>=200){
+    if(!cities.length){ log('没有城池，无法招兵'); renderAll(); return; }
+    const troopCap = cities.length * 3000; // 与回合末预备役截断口径一致
+    if(p.troops>=troopCap){ log(`预备役已达上限（${troopCap}），无法继续招兵`); renderAll(); return; }
     p.gold-=150; p.food-=200;
     const recruitMul = cities.reduce((s, c) => s + getCityTraitEffects(c).recruitMul * getCityBuildingEffects(c).recruitMul, 0) / Math.max(1, cities.length);
     let add = Math.floor((100+Math.random()*101+p.tech.military.recruitBonus) * recruitMul); if((p.policy || state.policy)==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
@@ -108,10 +124,10 @@ function doInternal(type) {
     p.gold-=cost; p.tech.military.level++; p.tech.military.recruitBonus += 30; p.tech.military.atkBonus += 4; log(`军事科技升至 Lv.${p.tech.military.level}，招兵+${p.tech.military.recruitBonus}，全军攻击+${p.tech.military.atkBonus}%${cost<500?'（书院折扣）':''}`);
   }else if(type==='tech_fort' && p.gold>=Math.floor(500*(1-avgTechDiscount())) && p.tech.fort.level < p.tech.fort.max){
     const cost = Math.floor(500*(1-avgTechDiscount()));
-    p.gold-=cost; p.tech.fort.level++; p.tech.fort.defBonus += 0.1; cities.forEach(c=>{c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2));}); log(`城防科技升至 Lv.${p.tech.fort.level}，城防+${p.tech.fort.defBonus.toFixed(1)}${cost<500?'（书院折扣）':''}`);
+    p.gold-=cost; p.tech.fort.level++; p.tech.fort.defBonus += 0.1; log(`城防科技升至 Lv.${p.tech.fort.level}，城防+${p.tech.fort.defBonus.toFixed(1)}${cost<500?'（书院折扣）':''}`);
   }else if(type==='tech' && p.gold>=Math.floor(500*(1-avgTechDiscount()))){
-    // 兼容旧版研发科技：随机升级一个未满的科技
-    p.gold-=500; const opts = ['farm','comm','military','fort'].filter(k=>p.tech[k].level<p.tech[k].max);
+    // 兼容旧版研发科技：随机升级一个未满的科技（费用在递归的具体科技分支中扣除）
+    const opts = ['farm','comm','military','fort'].filter(k=>p.tech[k].level<p.tech[k].max);
     if(opts.length){ doInternal(`tech_${opts[Math.floor(Math.random()*opts.length)]}`); return; }
     log('所有科技已满级');
   }

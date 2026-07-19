@@ -4,7 +4,7 @@ import { factionCities, factionGenerals, player } from '../core/utils.js';
 import { playSound } from './audio.js';
 
 const ACHIEVEMENTS = [
-  { id: 'first_blood', name: '初出茅庐', desc: '攻占第一座城池', check: () => factionCities(getState().playerId).length >= 1 && getState().turn > 1 },
+  { id: 'first_blood', name: '初出茅庐', desc: '攻占第一座非起始城池', check: () => factionCities(getState().playerId).length > (getState().startCityCount || 0) },
   { id: 'expansion', name: '开疆拓土', desc: '拥有 10 座城池', check: () => factionCities(getState().playerId).length >= 10 },
   { id: 'dominator', name: '半壁江山', desc: '拥有 25 座城池', check: () => factionCities(getState().playerId).length >= 25 },
   { id: 'collector', name: '群英荟萃', desc: '拥有 20 名武将', check: () => factionGenerals(getState().playerId).length >= 20 },

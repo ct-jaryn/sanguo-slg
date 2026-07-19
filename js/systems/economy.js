@@ -15,6 +15,9 @@ import { saveAuto } from './save.js';
 import { checkAchievements } from './achievements.js';
 import { checkQuests } from '../config/quests.js';
 
+// 夏季每城免费征募的兵力（受守军上限约束）
+const SUMMER_DRAFT_TROOPS = 24;
+
 function advanceDate(state) {
   state.month++;
   state.turn++;
@@ -63,6 +66,7 @@ function resolveCityResources(f, state) {
       if (policy.id === 'tuntian') cityMoney *= 0.95;
       if (policy.id === 'zhongshang') cityMoney *= 1.2;
       if (policy.id === 'zhongshang') cityFood *= 0.95;
+      if (policy.id === 'renzheng') cityMoney *= 1.1;
     }
     if (diff) {
       cityFood *= diff.aiFoodMul;
@@ -70,7 +74,11 @@ function resolveCityResources(f, state) {
     }
     foodGain += cityFood;
     goldGain += cityMoney;
-    if (season === '夏' && Math.random() < 0.3) c.troops += Math.floor(20 * (1 + 0.2));
+    if (season === '夏' && Math.random() < 0.3) {
+      // 夏季免费征募：与玩家调兵同口径，受守军上限约束
+      const cap = 6000 + traitEffects.garrisonCapBonus + buildingEffects.garrisonCapBonus;
+      c.troops = Math.min(c.troops + SUMMER_DRAFT_TROOPS, cap);
+    }
     c.morale = Math.max(20, Math.min(100, c.morale - moraleDecay));
   });
 
@@ -79,33 +87,71 @@ function resolveCityResources(f, state) {
   return { cities, policy };
 }
 
+// 军团每回合粮饷需求（并入总消耗，参与饥荒判定）
+function armyFoodNeed(f) {
+  const myArmies = factionArmies(f.id);
+  const eliteCfg = getEliteTroop(f.id);
+  let need = 0;
+  myArmies.forEach(a => {
+    const eliteFoodMul = eliteCfg ? (eliteCfg.food || 1) : 1;
+    need += Math.floor(a.infantry / 100) * 20
+      + Math.floor(a.cavalry / 100) * 30
+      + Math.floor(a.archer / 100) * 22
+      + Math.floor((a.elite || 0) / 100) * 20 * (eliteFoodMul - 1);
+  });
+  return need;
+}
+
+// 断粮减员：预备役 → 各城守军 → 军团（按比例削减兵种），杜绝白嫖维持费
+function applyFamineDecay(f, cities, decay) {
+  let remain = decay;
+  const fromReserve = Math.min(f.troops, remain);
+  f.troops -= fromReserve;
+  remain -= fromReserve;
+  if (remain > 0) {
+    cities.forEach(c => {
+      if (remain <= 0) return;
+      const d = Math.min(c.troops, remain);
+      c.troops -= d;
+      remain -= d;
+    });
+  }
+  if (remain > 0) {
+    factionArmies(f.id).forEach(a => {
+      if (remain <= 0) return;
+      const total = a.infantry + a.cavalry + a.archer + (a.elite || 0);
+      if (total <= 0) return;
+      const d = Math.min(total, remain);
+      const ratio = (total - d) / total;
+      a.infantry = Math.floor(a.infantry * ratio);
+      a.cavalry = Math.floor(a.cavalry * ratio);
+      a.archer = Math.floor(a.archer * ratio);
+      a.elite = Math.floor((a.elite || 0) * ratio);
+      remain -= d;
+    });
+  }
+}
+
 function consumeUpkeep(f, cities) {
   const garrisonTotal = cities.reduce((s, c) => s + c.troops, 0);
   const policy = f.policy ? POLICIES[f.policy] : null;
-  let consume = Math.floor((f.troops + garrisonTotal) / 100) * 20;
+  // 军团粮饷与预备役/守军粮耗合并结算，统一参与饥荒判定
+  let consume = Math.floor((f.troops + garrisonTotal) / 100) * 20 + armyFoodNeed(f);
   if (policy && policy.id === 'shangwu') consume = Math.floor(consume * 1.1);
   f.food -= consume;
 
   if (f.food < 0) {
     const decay = Math.floor(Math.abs(f.food) / 5);
-    f.troops = Math.max(0, f.troops - decay);
+    applyFamineDecay(f, cities, decay);
     if (f.id === getState().playerId) log(`粮食不足，兵力衰减 ${decay}`);
     f.food = 0;
   }
-  f.troops = Math.min(f.troops, cities.length * 3000);
-}
-
-function consumeArmyFood(f) {
-  const myArmies = factionArmies(f.id);
-  const eliteCfg = getEliteTroop(f.id);
-  myArmies.forEach(a => {
-    const eliteFoodMul = eliteCfg ? (eliteCfg.food || 1) : 1;
-    const foodNeed = Math.floor(a.infantry / 100) * 20
-      + Math.floor(a.cavalry / 100) * 30
-      + Math.floor(a.archer / 100) * 22
-      + Math.floor((a.elite || 0) / 100) * 20 * (eliteFoodMul - 1);
-    f.food -= foodNeed;
-  });
+  // 预备役超出承载上限时裁减（明示日志，不再静默蒸发）
+  const reserveCap = cities.length * 3000;
+  if (f.troops > reserveCap) {
+    if (f.id === getState().playerId) log(`预备役超出承载上限，裁减 ${f.troops - reserveCap} 兵`);
+    f.troops = reserveCap;
+  }
 }
 
 function resolveResources(state) {
@@ -113,7 +159,6 @@ function resolveResources(state) {
     if (f.eliminated) return;
     const { cities } = resolveCityResources(f, state);
     consumeUpkeep(f, cities);
-    consumeArmyFood(f);
   });
 }
 
@@ -153,7 +198,6 @@ function endTurnCleanup(state) {
   checkAchievements();
   const completed = checkQuests();
   completed.forEach(q => log(`任务完成：${q.name} — ${q.rewardText}`));
-  autoResolveAllPending();
   saveAuto();
 }
 
@@ -161,6 +205,8 @@ function nextTurn() {
   const state = getState();
   if (state.gameOver) return;
 
+  // 先结算上一回合遗留的待处理事件，再进入新回合；本回合新触发的事件留给玩家处理
+  autoResolveAllPending();
   advanceDate(state);
   resolveWounds(state);
   resolveResources(state);

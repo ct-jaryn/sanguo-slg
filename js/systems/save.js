@@ -62,7 +62,7 @@ function importEncryptedSave(input) {
     const header = JSON.parse(base64ToUtf8(parts[0]));
     const decrypted = xorDecrypt(parts[1], header.exportedAt);
     const data = JSON.parse(decrypted);
-    if (header.v !== SAVE_VERSION) { log(`存档版本 ${header.v} 与当前版本 ${SAVE_VERSION} 不匹配`); return false; }
+    // 与本地读档保持一致：版本不符不直接拒绝，统一交给 deserializeState 做旧档迁移
     deserializeState(data);
     log(`存档已导入（版本 ${header.v}，导出时间 ${header.exportedAt}）`);
     return true;
@@ -71,7 +71,8 @@ function importEncryptedSave(input) {
 
 function promptImportSave() {
   const raw = prompt('请粘贴加密存档内容（含版本号与导出时间的完整文本）：');
-  if (raw) importEncryptedSave(raw);
+  if (!raw) return false;
+  return importEncryptedSave(raw);
 }
 
 function xorEncrypt(str, key) {
@@ -141,13 +142,13 @@ function serializeState() {
 }
 
 function deserializeState(data) {
-  setState(data);
-  const state = getState();
+  // 先在局部对象上完成全部迁移与校验，全部通过后再替换全局 state，避免迁移中途抛错污染当前对局
+  const state = data;
   if (!state.nextArmyId) state.nextArmyId = (state.armies || []).reduce((m, a) => Math.max(m, a.id || 0), 0) + 1;
   if (!state.armies) state.armies = [];
   // Rebuild faction list if huangjin exists
   if (!state.factions.huangjin && state.cities.some(c => c.owner === 'huangjin')) {
-    state.factions.huangjin = { id: 'huangjin', name: '黄巾军', color: '#d4af37', leader: '张角', personality: 'expansion', ai: true, food: 500, gold: 200, troops: 0, morale: 60, allies: [], tech: JSON.parse(JSON.stringify(DEFAULT_TECH)) };
+    state.factions.huangjin = { id: 'huangjin', name: '黄巾军', color: '#d4af37', leader: '张角', personality: 'expansion', ai: true, food: 500, gold: 200, troops: 0, morale: 60, allies: [], eliminated: false, tech: JSON.parse(JSON.stringify(DEFAULT_TECH)) };
   }
   // 兼容旧存档：补齐 eliminated 标志与 allies 数组
   Object.values(state.factions).forEach(f => {
@@ -191,7 +192,8 @@ function deserializeState(data) {
   if (!state.eventsTriggered) state.eventsTriggered = {};
   if (!Array.isArray(state.pendingEvents)) state.pendingEvents = [];
   if (!Array.isArray(state.eventHistory)) state.eventHistory = [];
-  if (!state.eventIdSeq) state.eventIdSeq = (state.pendingEvents.length + state.eventHistory.length) + 1;
+  // 取现存事件（待处理+历史）的最大 id + 1，避免与待处理事件 id 冲突导致 resolveEvent 误删
+  if (!state.eventIdSeq) state.eventIdSeq = Math.max(0, ...state.pendingEvents.map(e => e.id || 0), ...state.eventHistory.map(e => e.id || 0)) + 1;
   if (state.yellowTurban === undefined) state.yellowTurban = false;
   if (!Array.isArray(state.logs)) state.logs = [];
   if (!state.gameOver) state.gameOver = false;
@@ -234,13 +236,14 @@ function deserializeState(data) {
       const live = poolByName.get(old.name);
       if (live) {
         g.equipment[slot] = live;
-        live.owned = false;
+        live.owned = true;
       } else {
         g.equipment[slot] = null;
       }
     });
   });
-  // 同步日志模块的 state 引用，避免读档后日志写入旧对象
+  // 全部迁移与校验通过后才替换全局 state，并同步日志模块的 state 引用，避免读档后日志写入旧对象
+  setState(state);
   setLogState(state);
 }
 

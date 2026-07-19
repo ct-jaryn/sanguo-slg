@@ -13,6 +13,7 @@ import { armyBattle, estimateBattle } from '../../core/battle.js';
 import { showBattleFx, showBattleReport, renderAll, closeModal } from '../common.js';
 import { playSound } from '../../systems/audio.js';
 import { checkAchievements } from '../../systems/achievements.js';
+import { checkVictory } from '../../systems/gameEnd.js';
 
 function renderMilitary(c) {
   const state = getState();
@@ -227,11 +228,13 @@ function doArmyAttack() {
   if(tactic.req && !tactic.req(mainGeneral, target)) { alert('当前主将不满足该战术条件'); return; }
   if(target.owner) setRelation(state.playerId,target.owner,-100);
   const result = armyBattle(state.playerId, target.owner||'neutral', army, target, tacticKey);
-  if (result && result.playerInvolved) {
+  // 围城非决胜回合无战报（report 为 null），只刷新界面
+  if (result && result.playerInvolved && result.report) {
     showBattleFx(result.fxText, result.victory ? '' : 'defeat');
     playSound(result.sound);
     showBattleReport(result.report);
     checkAchievements();
+    if (result.victory) checkVictory();
   }
   renderAll();
 }

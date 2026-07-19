@@ -25,6 +25,11 @@ import { nextTurn } from './systems/economy.js';
 
 function initGame() {
   initState();
+  try {
+    if (localStorage.getItem('sanguo_slg_tutorial_seen')) getState().tutorial = false;
+  } catch (e) {}
+  if (getState().tutorial) setTimeout(() => { showTutorialStep(); }, 100);
+  renderAll();
 }
 
 const appActions = {
@@ -67,7 +72,7 @@ const appActions = {
   saveGame,
   exportEncryptedSave,
   importEncryptedSave: (input) => { if (importEncryptedSave(input)) renderAll(); },
-  promptImportSave,
+  promptImportSave: () => { if (promptImportSave()) renderAll(); },
   loadGame: () => {
     if (loadGame()) {
       if (getState().tutorial) setTimeout(() => { showTutorialStep(); }, 100);

@@ -1,7 +1,8 @@
 import { getState, DEFAULT_TECH } from '../core/state.js';
 import { log } from '../core/log.js';
 import {
-  getSeason, player, factionCities, factionGenerals, findCity, findGeneral, setRelation
+  getSeason, player, factionCities, factionGenerals, findCity, findGeneral, setRelation,
+  removeGeneralFromArmies, disbandArmiesAt
 } from '../core/utils.js';
 import { EVENTS } from '../config/events.js';
 import { checkAchievements } from './achievements.js';
@@ -29,35 +30,40 @@ const EVENT_CHAINS = {
   }
 };
 
-function startEventChain(chainId) {
-  getState().eventChains = getState().eventChains || {};
-  getState().eventChains[chainId] = { step: 0, active: true };
+// 事件链进度按势力独立记录：eventChains[factionId][chainId]，各势力互不干扰
+function startEventChain(chainId, factionId) {
+  const st = getState();
+  st.eventChains = st.eventChains || {};
+  st.eventChains[factionId] = st.eventChains[factionId] || {};
+  // 每个势力每条链只启动一次
+  if (st.eventChains[factionId][chainId]) return;
+  st.eventChains[factionId][chainId] = { step: 0, active: true };
 }
 
-function advanceEventChain(chainId) {
-  if (!getState().eventChains || !getState().eventChains[chainId]) return;
+function advanceEventChain(chainId, factionId) {
+  const progress = getState().eventChains?.[factionId]?.[chainId];
+  if (!progress) return;
   const chain = EVENT_CHAINS[chainId];
-  const progress = getState().eventChains[chainId];
   progress.step++;
   if (progress.step >= chain.next.length) {
     progress.active = false;
   }
 }
 
-function getChainNextEvent(chainId) {
-  if (!getState().eventChains || !getState().eventChains[chainId]) return null;
-  const progress = getState().eventChains[chainId];
-  if (!progress.active) return null;
+function getChainNextEvent(chainId, factionId) {
+  const progress = getState().eventChains?.[factionId]?.[chainId];
+  if (!progress || !progress.active) return null;
   const chain = EVENT_CHAINS[chainId];
   return chain.next[progress.step] || null;
 }
 
 function triggerChainedEvent(f) {
-  if (!getState().eventChains) return;
-  Object.keys(getState().eventChains).forEach(chainId => {
-    const progress = getState().eventChains[chainId];
+  const chains = getState().eventChains?.[f.id];
+  if (!chains) return;
+  Object.keys(chains).forEach(chainId => {
+    const progress = chains[chainId];
     if (!progress.active || Math.random() > EVENT_CHAINS[chainId].chance) return;
-    const nextId = getChainNextEvent(chainId);
+    const nextId = getChainNextEvent(chainId, f.id);
     if (!nextId) return;
     const ev = EVENTS.find(e => e.id === nextId);
     if (!ev) return;
@@ -67,11 +73,12 @@ function triggerChainedEvent(f) {
     const ctx = { state: getState(), faction: f, city };
     if (ev.condition && !ev.condition(ctx)) return;
     addPendingEvent(ev, ctx);
-    advanceEventChain(chainId);
+    advanceEventChain(chainId, f.id);
   });
 }
 
-function tryTriggerHistoricalEvent(evId) {
+// flagName 传入时，事件成功入队即置一次性标记——避免事件跨回合挂起期间被重复入队
+function tryTriggerHistoricalEvent(evId, flagName) {
   const ev = EVENTS.find(e => e.id === evId);
   if (!ev) return;
   const cities = factionCities(getState().playerId);
@@ -80,6 +87,7 @@ function tryTriggerHistoricalEvent(evId) {
   const ctx = { state: getState(), faction: player(), city };
   if (ev.condition && !ev.condition(ctx)) return;
   addPendingEvent(ev, ctx);
+  if (flagName) getState().eventsTriggered[flagName] = true;
 }
 
 function historicalEvents() {
@@ -90,26 +98,31 @@ function historicalEvents() {
     Object.values(getState().factions).forEach(f=>{
       if(!f.eliminated){ f.gold = Math.floor(f.gold*0.85); f.food = Math.floor(f.food*0.85); }
     });
+    // 洛阳焚毁落到实处：士气大跌、守军溃散
+    const ly = findCity('洛阳');
+    if(ly){ ly.morale = Math.max(20, ly.morale - 30); ly.troops = Math.floor(ly.troops * 0.5); }
     log('董卓乱政：洛阳焚毁，天下群雄资源受损，讨伐之声四起。');
   }
   // 煮酒论英雄
   if(y>=2 && y<=4 && getState().playerId==='liu' && !getState().eventsTriggered.cookingWine && getState().factions.cao && !getState().factions.cao.eliminated){
-    tryTriggerHistoricalEvent('cooking_wine');
+    tryTriggerHistoricalEvent('cooking_wine', 'cookingWine');
   }
   // 十八路诸侯讨董
   if(y>=1 && y<=2 && !getState().eventsTriggered.coalitionDongzhuo){
-    tryTriggerHistoricalEvent('coalition_dongzhuo');
+    tryTriggerHistoricalEvent('coalition_dongzhuo', 'coalitionDongzhuo');
   }
-  // Yellow Turban
+  // 黄巾余党复起（张角已死于 184 年，由在世的渠帅管亥领衔旧部，张角本人保持游离在野）
   if(y>=2 && y<=4 && !getState().eventsTriggered.yellowTurban && Math.random()<0.25){
     getState().eventsTriggered.yellowTurban=true;
     const free = getState().cities.filter(c=>!c.owner);
     if(free.length){
       const c = free[Math.floor(Math.random()*free.length)];
       c.owner='huangjin'; c.troops=3000; c.morale=50;
-      getState().factions.huangjin = {id:'huangjin',name:'黄巾军',color:'#d4af37',leader:'张角',personality:'expansion',ai:true,food:500,gold:200,troops:0,morale:60,allies:[],eliminated:false,tech:JSON.parse(JSON.stringify(DEFAULT_TECH))};
+      getState().factions.huangjin = {id:'huangjin',name:'黄巾军',color:'#d4af37',leader:'管亥',personality:'expansion',ai:true,food:500,gold:200,troops:0,morale:60,allies:[],eliminated:false,tech:JSON.parse(JSON.stringify(DEFAULT_TECH))};
       getState().relations.huangjin={}; Object.keys(getState().factions).forEach(k=>{ if(k==='huangjin'){getState().relations.huangjin.huangjin=100;} else {getState().relations.huangjin[k]=-50;getState().relations[k].huangjin=-50;} });
-      log(`黄巾起义爆发！张角占据 ${c.name}，建立黄巾军势力！`);
+      // 黄巾旧部此前在野（free），此时聚拢到黄巾军麾下
+      ['张宝','张梁','管亥','裴元绍'].forEach(n=>{ const g=findGeneral(n); if(g && g.faction==='free') g.faction='huangjin'; });
+      log(`黄巾余党复起！管亥聚集黄巾旧部占据 ${c.name}，建立黄巾军势力！`);
     }
   }
   // Guandu
@@ -118,11 +131,14 @@ function historicalEvents() {
     setRelation('cao','yuan',-100);
     log('官渡之战：曹操与袁绍正式宣战！');
   }
-  // San gu maolu
-  if(y>=3 && y<=5 && !getState().eventsTriggered.sangu && player().id==='liu' && !factionGenerals('liu').some(g=>g.name==='诸葛亮')){
+  // 三顾茅庐（窗口排在白门楼/官渡之后，贴合史实顺序）
+  if(y>=9 && y<=11 && !getState().eventsTriggered.sangu && player().id==='liu' && !factionGenerals('liu').some(g=>g.name==='诸葛亮')){
     getState().eventsTriggered.sangu=true;
     const zg = findGeneral('诸葛亮');
-    if(zg && zg.faction!=='liu'){ zg.faction='liu'; zg.loyalty=100; log('三顾茅庐：诸葛亮出山，辅佐刘备！'); }
+    if(zg && zg.faction!=='liu'){
+      removeGeneralFromArmies('诸葛亮');   // 先清原势力军团，避免幽灵武将
+      zg.faction='liu'; zg.loyalty=100; log('三顾茅庐：诸葛亮出山，辅佐刘备！');
+    }
   }
   // Chibi
   if(y>=6 && y<=8 && !getState().eventsTriggered.chibi){
@@ -137,12 +153,12 @@ function historicalEvents() {
   // 夷陵之战
   if(y>=12 && y<=16 && getState().playerId==='liu' && !getState().eventsTriggered.yiling && getState().factions.sun && !getState().factions.sun.eliminated){
     const jz = findCity('荆州');
-    if(jz && jz.owner==='sun') tryTriggerHistoricalEvent('yiling_battle');
+    if(jz && jz.owner==='sun') tryTriggerHistoricalEvent('yiling_battle', 'yiling');
   }
-  // 南中平定
-  if(y>=10 && y<=18 && !getState().eventsTriggered.sevenCaptures){
+  // 南中平定（窗口排在夷陵之战之后，贴合史实顺序）
+  if(y>=17 && y<=19 && !getState().eventsTriggered.sevenCaptures){
     const ownedSouth = ['成都','永安','建宁','云南'].filter(n=>{ const c=findCity(n); return c && c.owner===getState().playerId; }).length;
-    if(ownedSouth>=2) tryTriggerHistoricalEvent('seven_captures');
+    if(ownedSouth>=2) tryTriggerHistoricalEvent('seven_captures', 'sevenCaptures');
   }
   // Diyi shijinzhou
   if(y>=8 && y<=12 && !getState().eventsTriggered.jingzhouLost){
@@ -150,6 +166,7 @@ function historicalEvents() {
     const jz = findCity('荆州');
     if(guanyu && guanyu.faction==='liu' && jz && jz.owner==='liu' && getState().factions.sun && !getState().factions.sun.eliminated && Math.random()<0.2){
       getState().eventsTriggered.jingzhouLost=true;
+      disbandArmiesAt('荆州', 'liu');   // 易主前遣散守方军团，避免幽灵军团
       jz.owner='sun'; jz.troops=Math.floor(jz.troops*0.7);
       log(`大意失荆州：孙权偷袭荆州，关羽败走麦城！`);
     }
@@ -161,9 +178,11 @@ function historicalEvents() {
       factionCities('lv').forEach(c=>{c.owner='cao';c.morale=50;});
       // 吕布势力灭亡：清理其军团，避免幽灵势力卡住武将
       getState().armies = getState().armies.filter(a=>a.faction!=='lv');
+      // 残余武将流落为在野，可被各方寻访收用
+      getState().generals.forEach(g=>{ if(g.faction==='lv'){ g.faction='free'; g.loyalty=60; } });
       getState().factions.lv.eliminated = true;
       getState().factions.lv.ai = false;
-      log('白门楼：吕布兵败被杀，城池尽归曹操！');
+      log('白门楼：吕布兵败，势力覆灭，余部流落四方！');
     }
   }
   // Wuzhangyuan
@@ -171,7 +190,8 @@ function historicalEvents() {
     const zg = findGeneral('诸葛亮');
     if(zg && zg.faction===getState().playerId && Math.random()<0.3){
       getState().eventsTriggered.wuzhangyuan=true;
-      zg.injured=1; zg.injuredTurns=99;
+      removeGeneralFromArmies('诸葛亮');   // 移出军团，不再出战
+      zg.injured=1; zg.injuredTurns=9999;  // 星落秋风：不再伤愈复出
       log('五丈原：诸葛亮星落秋风，英年早逝！');
     }
   }
@@ -179,9 +199,10 @@ function historicalEvents() {
   if(y>=20 && y<=25 && !getState().eventsTriggered.sanguiguijin){
     const smy = findGeneral('司马懿');
     const sf = smy && smy.faction!==getState().playerId ? getState().factions[smy.faction] : null;
-    if(sf && !sf.eliminated && Math.random()<0.2){
+    // 只有司马氏所在势力不弱于玩家时才可能篡权截胡，避免无视玩家局势强行判负
+    if(sf && !sf.eliminated && factionCities(sf.id).length >= factionCities(getState().playerId).length && Math.random()<0.2){
       getState().eventsTriggered.sanguiguijin=true;
-      log(`三国归晋：司马氏篡${sf.name}，天下终归晋朝！`);
+      log('三国归晋：司马氏篡魏，天下终归晋朝！');
       getState().gameOver=true; getState().winner=smy.faction; getState().endingTitle='三国归晋：天下终归司马氏';
     }
   }
@@ -200,6 +221,8 @@ function randomEvent() {
 }
 
 function triggerSeasonEvent() {
+  // 每季只在首月触发一次（春3、夏6、秋9、冬12），避免同季事件逐月重复触发
+  if (![3, 6, 9, 12].includes(getState().month)) return;
   const season = getSeason();
   const seasonEvents = EVENTS.filter(ev => ev.season === season);
   if (!seasonEvents.length) return;
@@ -263,9 +286,9 @@ function triggerRandomEvent() {
     }
     if (!pick) pick = candidates[0];
     addPendingEvent(pick.ev, pick.ctx);
-    // 启动事件链
+    // 启动事件链（按势力维度，同一势力同一链不重复启动）
     const chain = Object.values(EVENT_CHAINS).find(ch => ch.first === pick.ev.id);
-    if (chain && !getState().eventChains?.[chain.first]) startEventChain(chain.first);
+    if (chain && !getState().eventChains?.[pick.ctx.faction.id]?.[chain.first]) startEventChain(chain.first, pick.ctx.faction.id);
     candidates.splice(candidates.indexOf(pick), 1);
     if (!candidates.length) break;
   }

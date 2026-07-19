@@ -37,7 +37,6 @@ function makeGenerals() {
     ['黄忠','free',93,62,85,55,''],
     ['马超','free',96,48,88,45,''],
     ['魏延','free',90,55,82,50,''],
-    // 黄巾军武将（黄巾起义事件触发后归 huangjin）
     // 蜀汉补充
     ['姜维','free',92,88,90,70,'qixi'],
     ['黄月英','liu',45,85,50,75,''],
@@ -98,12 +97,12 @@ function makeGenerals() {
     ['陈登','free',60,82,70,85,''],
     ['陶谦','free',50,70,65,80,''],
     ['孔融','free',30,85,45,90,''],
-    // 黄巾军武将（黄巾起义事件触发后归 huangjin）
-    ['张角','huangjin',55,92,80,85,'shensuan'],
-    ['张宝','huangjin',70,75,72,60,'huoji'],
-    ['张梁','huangjin',68,68,70,55,''],
-    ['管亥','huangjin',84,40,72,38,''],
-    ['裴元绍','huangjin',70,35,62,33,'']
+    // 黄巾军武将（初始为 free，黄巾起义事件触发后归 huangjin）
+    ['张角','free',55,92,80,85,'shensuan'],
+    ['张宝','free',70,75,72,60,'huoji'],
+    ['张梁','free',68,68,70,55,''],
+    ['管亥','free',84,40,72,38,''],
+    ['裴元绍','free',70,35,62,33,'']
   ];
   return data.map(([n,f,fo,i,c,p,s],idx)=>({id:idx,name:n,faction:f,force:fo,intelligence:i,command:c,politics:p,loyalty:f==='free'?60:85,skill:s||null,injured:0,injuredTurns:0,exp:0,level:1,equipment:{weapon:null,armor:null,horse:null}}));
 }

@@ -28,7 +28,8 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
 
   // 围城：多回合消耗，第一次不判定胜负
   if (tacticKey === 'siege') {
-    if (!targetCity.siegeProgress) targetCity.siegeProgress = { attackerId, armyId: army.id, progress: 0, turns: 0 };
+    // 围城进度归属其他势力时不继承，重建
+    if (!targetCity.siegeProgress || targetCity.siegeProgress.attackerId !== attackerId) targetCity.siegeProgress = { attackerId, armyId: army.id, progress: 0, turns: 0 };
     targetCity.siegeProgress.turns++;
     const bond = getArmyBondBonus(army);
     const bondMul = bond.mods.forceMul * bond.mods.atkMul;
@@ -38,10 +39,11 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
       const ratio = eliteRatio(army, atkEliteCfg);
       siegeMul = 1 + ratio * (atkEliteCfg.siegeAtk - 1);
     }
+    const originalDefTroops = targetCity.troops;
     const siegeDamage = Math.floor(total * 0.15 * bondMul * siegeMul / cityTraits.defMul * cityTraits.defenseMul);
     targetCity.troops = Math.max(0, targetCity.troops - siegeDamage);
     targetCity.siegeProgress.progress += Math.floor(25 / cityTraits.defMul);
-    const losses = Math.floor(total * 0.05 * lossMul);
+    const losses = Math.floor(total * 0.05 * tactic.loss * lossMul);
     applyArmyLosses(army, total, losses);
     addGeneralExp(mainGeneral, 15);
     if (playerInvolved && bond.active.length) bond.active.forEach(b => log(`羁绊触发：${b.name}！${b.desc}`));
@@ -49,12 +51,17 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     if (targetCity.siegeProgress.progress >= 100 || targetCity.troops === 0) {
       // 城池投降
       const oldOwner = targetCity.owner;
+      const defLosses = Math.max(0, originalDefTroops - targetCity.troops);
       disbandArmiesAt(targetCity.name, oldOwner);
       targetCity.owner = attackerId;
-      targetCity.troops = Math.max(0, targetCity.troops);
       targetCity.morale = Math.max(30, targetCity.morale - 20);
       army.city = targetCity.name;
       targetCity.siegeProgress = null;
+      // 破城后安置驻军：从军团幸存兵力中拨付，不留空城
+      const remain = armyTroopTotal(army);
+      const garrison = Math.floor(remain / 2);
+      if (remain > 0) applyArmyLosses(army, remain, garrison);
+      targetCity.troops = garrison;
       log(`${atkFaction.name} 的 ${army.name}(${mainGeneral?mainGeneral.name:'无将'}) 攻占了 ${targetCity.name}！围城成功`);
       if(oldOwner && getState().factions[oldOwner] && factionCities(oldOwner).length===0) log(`${getState().factions[oldOwner].name} 势力灭亡！`);
       return {
@@ -63,7 +70,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
           attacker: atkFaction.name, armyName: army.name, mainGeneral: mainGeneral ? mainGeneral.name : '无将',
           defender: oldOwner && getState().factions[oldOwner] ? getState().factions[oldOwner].name : '无主守军',
           cityName: targetCity.name, tacticName: tactic.name, victory: true,
-          atkLosses: losses, defLosses: Math.max(0, targetCity.troops),
+          atkLosses: losses, defLosses,
           reward: 0, equipment: null, bonds: bond.active.map(b => `攻：${b.name}`)
         },
         fxText: '大捷！', sound: 'victory'
@@ -113,7 +120,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   applyTroopTraitMods(army, targetCity, 'attack', aMods);
   if (defArmy) applyTroopTraitMods(defArmy, targetCity, 'defense', dMods);
 
-  attack *= aMods.forceMul * aMods.atkMul * tactic.atk;
+  attack *= aMods.forceMul * aMods.atkMul * aMods.moraleMul * aMods.defMul * tactic.atk;
 
   const cityTraits = getCityTraitEffects(targetCity);
 
@@ -131,7 +138,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   attack *= (1 + (atkFaction?.tech?.military?.atkBonus || 0) / 100);
 
   // 兵种克制
-  const atkShare = { infantry: army.infantry/total, cavalry: army.cavalry/total, archer: army.archer/total };
+  const atkShare = { infantry: army.infantry/(total||1), cavalry: army.cavalry/(total||1), archer: army.archer/(total||1) };
   const defComp = cityDefenseComp(targetCity);
   attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
 
@@ -147,7 +154,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   const defStats = effectiveStats(defGeneral);
   if(defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle==='function') SKILLS[defGeneral.skill].battle(dMods,aMods);
 
-  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus + buildingDefBonus) * dMods.defMul * dMods.moraleMul * (0.8+Math.random()*0.4);
+  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus + buildingDefBonus) * dMods.defMul * dMods.moraleMul * dMods.forceMul * dMods.atkMul * (0.8+Math.random()*0.4);
   const defEliteCfg = defenderId !== 'neutral' ? getEliteTroop(defenderId) : null;
   if (defEliteCfg && defArmy) {
     const ratio = eliteRatio(defArmy, defEliteCfg);
@@ -170,31 +177,37 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
   if (defBond.active.length) report.bonds.push(...defBond.active.map(b => `守：${b.name}`));
   let dropped = null;
   if (victory) {
-    getState().stats.wins++;
+    if (attackerId === getState().playerId) getState().stats.wins++;
     getState().stats.battles++;
+    // 火攻/火计：城破结算前对原守军造成额外损失，火攻并削减城防
+    if (tacticKey === 'fire') {
+      targetCity.troops = Math.floor(targetCity.troops * (1 - tactic.fireDamage));
+      targetCity.defense = Math.max(0, targetCity.defense * (1 - tactic.fireDamage));
+    }
+    if (mainGeneral && mainGeneral.skill === 'huoji') targetCity.troops = Math.floor(targetCity.troops * (1 - SKILLS.huoji.fire));
     const losses = Math.floor(total * 0.25 * tactic.loss * lossMul);
     const survivors = total - losses;
     const garrison = Math.floor(survivors / 2);
-    applyArmyLosses(army, total, losses);
+    // 驻军从军团幸存兵力中扣除，不凭空造兵
+    applyArmyLosses(army, total, losses + garrison);
     targetCity.troops = garrison;
     const oldOwner = targetCity.owner;
     if (oldOwner) getState().stats.generalsDefeated++;
     disbandArmiesAt(targetCity.name, oldOwner);
     targetCity.owner = attackerId;
+    targetCity.siegeProgress = null;
     targetCity.morale = Math.max(30, targetCity.morale - 20);
     army.city = targetCity.name;
     const reward = 200 * (mainGeneral && mainGeneral.skill === 'jianxiong' ? SKILLS.jianxiong.rewardGold : 1);
     atkFaction.gold += reward;
-    // 火攻：额外守军损失
-    if (tacticKey === 'fire') {
-      targetCity.troops = Math.floor(targetCity.troops * (1 - tactic.fireDamage));
-    }
-    if (mainGeneral && mainGeneral.skill === 'huoji') targetCity.troops = Math.floor(targetCity.troops * (1 - SKILLS.huoji.fire));
     addGeneralExp(mainGeneral, 30);
     if (defGeneral) addGeneralExp(defGeneral, 10);
     [['infantry', army.infantry], ['cavalry', army.cavalry], ['archer', army.archer]].forEach(([type, count]) => { if (count > 0) addTroopXP(army, type, 25); });
-    dropped = awardRandomEquipment(targetCity);
-    if (dropped) log(`缴获装备：${dropped.name}`);
+    // 仅玩家攻城胜利时掉落装备，避免 AI 抽干玩家装备池
+    if (attackerId === getState().playerId) {
+      dropped = awardRandomEquipment(targetCity);
+      if (dropped) log(`缴获装备：${dropped.name}`);
+    }
     log(`${atkFaction.name} 的 ${army.name}(${mainGeneral ? mainGeneral.name : '无将'}) 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
     if (oldOwner && getState().factions[oldOwner] && factionCities(oldOwner).length === 0) log(`${getState().factions[oldOwner].name} 势力灭亡！`);
     report.atkLosses = losses;
@@ -289,7 +302,7 @@ function awardRandomEquipment(city) {
   }
   // 基础掉落概率：60%，工坊增加概率
   if (Math.random() > 0.6 * Math.min(1.5, dropMul)) return null;
-  const weights = pool.map(it => it.rarity);
+  const weights = pool.map(it => 5 - it.rarity); // 反比权重：越稀有掉落越少
   const total = weights.reduce((a, b) => a + b, 0);
   let r = Math.random() * total;
   for (let i = 0; i < pool.length; i++) {
@@ -350,7 +363,7 @@ function estimateBattle(army, targetCity, tacticKey = 'normal') {
   applyTroopTraitMods(army, targetCity, 'attack', aMods);
   if (defArmy) applyTroopTraitMods(defArmy, targetCity, 'defense', dMods);
 
-  attack *= aMods.forceMul * aMods.atkMul * tactic.atk;
+  attack *= aMods.forceMul * aMods.atkMul * aMods.moraleMul * aMods.defMul * tactic.atk;
 
   const cityTraits = getCityTraitEffects(targetCity);
   if (tactic.waterBonus && RIVER_CITIES.includes(targetCity.name)) {
@@ -364,18 +377,19 @@ function estimateBattle(army, targetCity, tacticKey = 'normal') {
 
   attack *= (1 + (atkFaction?.tech?.military?.atkBonus || 0) / 100);
 
-  const atkShare = { infantry: army.infantry / total, cavalry: army.cavalry / total, archer: army.archer / total };
+  const atkShare = { infantry: army.infantry / (total || 1), cavalry: army.cavalry / (total || 1), archer: army.archer / (total || 1) };
   const defComp = cityDefenseComp(targetCity);
   attack *= (1 + COUNTER_BONUS * counterFactor(atkShare, defComp));
   attack *= cityTraits.defenseMul;
 
   const defFaction = targetCity.owner ? getState().factions[targetCity.owner] : null;
   const fortBonus = defFaction?.tech?.fort?.defBonus || 0;
+  const buildingDefBonus = getCityBuildingEffects(targetCity).defenseBonus || 0;
   const defGeneral = defenderId !== 'neutral' ? factionGenerals(defenderId).filter(g => !g.injured).sort((a, b) => b.command - a.command)[0] : null;
   const defStats = effectiveStats(defGeneral);
   if (defGeneral && defGeneral.skill && SKILLS[defGeneral.skill] && typeof SKILLS[defGeneral.skill].battle === 'function') SKILLS[defGeneral.skill].battle(dMods, aMods);
 
-  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus) * dMods.defMul * dMods.moraleMul;
+  let defense = targetCity.troops * 1.2 * (targetCity.defense * cityTraits.defMul + fortBonus + buildingDefBonus) * dMods.defMul * dMods.moraleMul * dMods.forceMul * dMods.atkMul;
   const defEliteCfg = defenderId !== 'neutral' ? getEliteTroop(defenderId) : null;
   if (defEliteCfg && defArmy) {
     const ratio = eliteRatio(defArmy, defEliteCfg);

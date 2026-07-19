@@ -18,7 +18,7 @@ const ELITE_TROOPS = {
     atk: 1.25,
     def: 1.0,
     food: 1.5,
-    desc: '曹操精锐骑兵，攻击+20%'
+    desc: '曹操精锐骑兵，攻击+25%'
   },
   sun: {
     id: 'jiefan',

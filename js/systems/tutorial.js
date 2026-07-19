@@ -50,7 +50,8 @@ function showTutorialStep() {
 
 function nextTutorialStep() {
   const next = (getState().tutorialStep || 0) + 1;
-  if (next >= TUTORIAL_STEPS.length) appActions.closeTutorial();
+  // 走完所有步骤与跳过教程走同一收尾逻辑，避免看完教程的玩家每次刷新都重看
+  if (next >= TUTORIAL_STEPS.length) skipTutorial();
   else { getState().tutorialStep = next; showTutorialStep(); }
 }
 

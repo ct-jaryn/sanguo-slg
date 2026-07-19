@@ -10,14 +10,14 @@ const QUESTS = [
     id: 'first_city',
     name: '初占城池',
     desc: '攻占第一座非起始城池',
-    condition: () => factionCities(getState().playerId).length >= 1 && getState().turn > 1,
+    condition: () => factionCities(getState().playerId).length > (getState().startCityCount || 0),
     reward: (state) => { player().gold += 500; player().food += 300; return '金钱+500 粮食+300'; }
   },
   {
     id: 'own_5_cities',
     name: '五城之主',
-    desc: '拥有 5 座城池',
-    condition: () => factionCities(getState().playerId).length >= 5,
+    desc: '在起始城池基础上再占 5 座城池',
+    condition: () => factionCities(getState().playerId).length >= (getState().startCityCount || 0) + 5,
     reward: () => { player().gold += 800; player().troops += 800; return '金钱+800 兵力+800'; }
   },
   {

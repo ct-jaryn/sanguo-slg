@@ -4,10 +4,13 @@ import {
   findCity, availableGenerals, armyTroopTotal, findGeneral, factionCities,
   factionArmies, relation, setRelation, effectiveStats
 } from '../core/utils.js';
-import { AI_COMP_PREFS, RIVER_CITIES, DIFFICULTY } from '../config/constants.js';
+import { AI_COMP_PREFS, RIVER_CITIES, DIFFICULTY, getCityTraitEffects } from '../config/constants.js';
 import { getEliteTroop, eliteCap, eliteUnlocked } from '../config/eliteTroops.js';
+import { getCityBuildingEffects } from '../config/buildings.js';
 import { TACTICS } from '../config/tactics.js';
 import { armyBattle } from '../core/battle.js';
+import { showBattleFx, showBattleReport } from '../ui/common.js';
+import { playSound } from './audio.js';
 import { checkAchievements } from './achievements.js';
 
 function aiArmyTacticHint(f, city) {
@@ -47,7 +50,7 @@ function getOptimalAIComp(f, city, use) {
   if (share.cavalry >= 0.4) formation = 'fengshi';
   else if (share.archer >= 0.35) formation = 'yanxing';
   else if (share.infantry >= 0.5) formation = 'fangyuan';
-  else if (hint === 'ambush' || hint === 'fire') formation = 'changsheng';
+  else if (hint === 'ambush' || hint === 'fire') formation = 'changshe';
   return { infantry: inf, cavalry: cav, archer: arc, hint, formation };
 }
 
@@ -96,7 +99,7 @@ function aiTurn(f) {
       if (tech === 'farm') techInfo.farmBonus += 10;
       else if (tech === 'comm') techInfo.commBonus += 8;
       else if (tech === 'military') { techInfo.recruitBonus += 30; techInfo.atkBonus += 4; }
-      else if (tech === 'fort') { techInfo.defBonus += 0.1; cities.forEach(c => c.defense = Math.min(2.5, +(c.defense + 0.1).toFixed(2))); }
+      else if (tech === 'fort') { techInfo.defBonus += 0.1; }
     }
   }
   // 民心维护：抵消每回合衰减，避免 AI 城池民心崩到 20
@@ -113,7 +116,7 @@ function aiTurn(f) {
     f.gold-=200; cities.forEach(c=>c.food+=15);
   }
   // Diplomatic AI ally
-  if(f.personality==='diplomatic' && Math.random()<0.4){
+  if(f.personality==='diplomatic' && f.gold>=500 && Math.random()<0.4){
     const candidates = Object.values(st.factions).filter(o=>o.id!==f.id && !o.eliminated && relation(f.id,o.id)>30 && !f.allies.includes(o.id) && !o.allies.includes(f.id));
     if(candidates.length){
       const t = candidates[Math.floor(Math.random()*candidates.length)];
@@ -126,8 +129,13 @@ function aiTurn(f) {
   // Distribute troops to cities and auto-create armies for AI
   if(cities.length && f.troops>0){
     const per = Math.floor(f.troops/cities.length);
-    cities.forEach(c=>{ c.troops += per; });
-    f.troops -= per*cities.length;
+    cities.forEach(c=>{
+      // 与玩家侧相同，单城守军不得超过上限 6000+特色/建筑加成
+      const garrisonCap = 6000 + getCityTraitEffects(c).garrisonCapBonus + getCityBuildingEffects(c).garrisonCapBonus;
+      const add = Math.max(0, Math.min(per, Math.floor(garrisonCap - c.troops)));
+      c.troops += add;
+      f.troops -= add;
+    });
   }
   // Auto-create or replenish one army per city if enough troops
   const myArmies = factionArmies(f.id);
@@ -211,11 +219,21 @@ function aiArmyAttack(f) {
       // 主将受伤则跳过该军团
       const mg = atk.army.generals.length ? findGeneral(atk.army.generals[0]) : null;
       if(mg && mg.injured) continue;
+      // 目标可能已被本势力其他军团攻下，进攻前重新校验归属，避免攻击己方城池
+      if(atk.to.owner===f.id) continue;
       if(armyTroopTotal(atk.army)>atk.to.troops*diff.aiAttackThreshold){
         if(atk.to.owner) setRelation(f.id,atk.to.owner,-100);
         const tactic = chooseAITactic(atk.army, atk.to);
-        armyBattle(f.id, atk.to.owner||'neutral', atk.army, atk.to, tactic);
+        const result = armyBattle(f.id, atk.to.owner||'neutral', atk.army, atk.to, tactic);
         checkAchievements();
+        // AI 攻玩家城池时给玩家弹战报与特效（attacker 必为 AI，playerInvolved 即玩家为守方）
+        if(result && result.playerInvolved && result.report){
+          showBattleFx(result.fxText, result.victory ? '' : 'defeat');
+          playSound(result.sound);
+          showBattleReport(result.report);
+        }
+        // 攻下一城后军团已移动，本回合不再进攻下一目标（与玩家侧相邻规则一致）
+        if(atk.to.owner===f.id) break;
         if(Math.random()<0.6) break;
       }
     }
