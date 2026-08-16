@@ -96,7 +96,12 @@ function doInternal(type) {
     if(p.troops>=troopCap){ log(`预备役已达上限（${troopCap}），无法继续招兵`); renderAll(); return; }
     p.gold-=150; p.food-=200;
     const recruitMul = cities.reduce((s, c) => s + getCityTraitEffects(c).recruitMul * getCityBuildingEffects(c).recruitMul, 0) / Math.max(1, cities.length);
-    let add = Math.floor((100+Math.random()*101+p.tech.military.recruitBonus) * recruitMul); if((p.policy || state.policy)==='shangwu') add+=30; p.troops+=add; log(`招兵买马，兵力+${add}`);
+    let add = Math.floor((100+Math.random()*101+p.tech.military.recruitBonus) * recruitMul); if((p.policy || state.policy)==='shangwu') add+=30;
+    // 招兵量不超过预备役上限，避免溢出部分在回合末被静默裁减、白花钱粮
+    const room = troopCap - p.troops;
+    const actualAdd = Math.min(add, room);
+    p.troops += actualAdd;
+    log(`招兵买马，兵力+${actualAdd}${actualAdd < add ? `（已达预备役上限 ${troopCap}）` : ''}`);
   }else if(type==='search' && p.gold>=300){
     p.gold-=300;
     if(Math.random()<0.4){

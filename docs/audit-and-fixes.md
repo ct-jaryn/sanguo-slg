@@ -167,6 +167,17 @@
 - ✅ L8（董卓）：洛阳焚毁落到实处——洛阳士气 -30（下限 20）、守军减半（eventSystem.js）。
 - ✅ L15：夏季免费守军套用 `garrisonCap` 上限，魔法数提取为 `SUMMER_DRAFT_TROOPS` 常量（economy.js）。
 
+### 2026-07-19 复审计批次（独立复审新增问题 N1-N6）
+
+本次为对 master 独立复审计后新增发现的 6 项问题（原 48 项全部核验无回归），一次性修复：
+
+- ✅ N1：`js/ui/tabs/military.js` 渲染时临时 div 未挂载，`document.getElementById` 取空导致「战前估算」初始空白、战术描述 `tactic-desc` 永不显示、三处 `addEventListener` 全部空转。改为 `setTimeout(...,0)` 延迟到内容挂载后再初始化（与 internal.js 同手法）。
+- ✅ N2：`js/systems/ai.js` AI 建军直接用 `min(city.troops,1500)` 抽空城池守军（0 守军城被轻易反攻，实测刘备 3 年从 5 城掉到 3 城）。新增常量 `AI_MIN_GARRISON=300`，建军/补兵均保留最低守军。
+- ✅ N3：`js/core/battle.js` 普通攻城与围城胜利安置驻军不校验守军上限，可超 6000+特色/建筑加成。改为 `min(garrison, garrisonCap)`，超出部分留在军团中（不凭空造兵、不销毁）。
+- ✅ N4：`js/ui/tabs/internal.js` 招兵未 clamp 预备役上限，溢出部分回合末被静默裁减、白花钱粮。改为按剩余容量 clamp 并明确日志。
+- ✅ N5：`js/systems/ai.js` 科技升级满级回退逻辑可读性差。改为先过滤未满级科技再选择，全满级明确不升级。
+- ✅ N6：`js/ui/tabs/military.js` 内联 `onchange` 与失效 `addEventListener` 冗余。随 N1 修复统一为 `addEventListener` 单一来源，移除内联 onchange（避免重复触发）。
+
 ## 七、验证与收尾（2026-07-19）
 
 **修复范围**：严重 7 项、中等 21 项、轻微 20 项，共 48 项全部修复完成；设计取舍 3 项（N1-N3）按记录保留现状。改动涉及 17 个 JS 文件（+288/-150 行）。

@@ -57,9 +57,10 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
       targetCity.morale = Math.max(30, targetCity.morale - 20);
       army.city = targetCity.name;
       targetCity.siegeProgress = null;
-      // 破城后安置驻军：从军团幸存兵力中拨付，不留空城
+      // 破城后安置驻军：从军团幸存兵力中拨付，不留空城；且不超守军上限（超出部分留在军团中）
       const remain = armyTroopTotal(army);
-      const garrison = Math.floor(remain / 2);
+      const garrisonCap = 6000 + cityTraits.garrisonCapBonus + getCityBuildingEffects(targetCity).garrisonCapBonus;
+      const garrison = Math.min(Math.floor(remain / 2), garrisonCap);
       if (remain > 0) applyArmyLosses(army, remain, garrison);
       targetCity.troops = garrison;
       log(`${atkFaction.name} 的 ${army.name}(${mainGeneral?mainGeneral.name:'无将'}) 攻占了 ${targetCity.name}！围城成功`);
@@ -187,8 +188,9 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     if (mainGeneral && mainGeneral.skill === 'huoji') targetCity.troops = Math.floor(targetCity.troops * (1 - SKILLS.huoji.fire));
     const losses = Math.floor(total * 0.25 * tactic.loss * lossMul);
     const survivors = total - losses;
-    const garrison = Math.floor(survivors / 2);
-    // 驻军从军团幸存兵力中扣除，不凭空造兵
+    // 驻军从军团幸存兵力中扣除，不凭空造兵；且不超守军上限（超出部分留在军团中）
+    const garrisonCap = 6000 + cityTraits.garrisonCapBonus + buildingEffects.garrisonCapBonus;
+    const garrison = Math.min(Math.floor(survivors / 2), garrisonCap);
     applyArmyLosses(army, total, losses + garrison);
     targetCity.troops = garrison;
     const oldOwner = targetCity.owner;

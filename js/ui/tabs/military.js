@@ -76,9 +76,9 @@ function renderMilitary(c) {
     }).join('') : '';
     const toOptions = neighborOpts || '<option value="">无相邻目标</option>';
     html += `<div style="margin:8px 0">
-      <label>军团：</label><select id="atk-army" onchange="appActions.updateAtkTargets(); appActions.updateAtkPreview();">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
-      <label> 目标城：</label><select id="atk-to" onchange="appActions.updateAtkPreview()">${toOptions}</select>
-      <label> 战术：</label><select id="atk-tactic" onchange="appActions.updateAtkPreview()">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
+      <label>军团：</label><select id="atk-army">${myArmies.map(a => `<option value="${a.id}">${a.name} (${armyTroopTotal(a)}人 @${a.city || '待命'})</option>`).join('')}</select>
+      <label> 目标城：</label><select id="atk-to">${toOptions}</select>
+      <label> 战术：</label><select id="atk-tactic">${Object.entries(TACTICS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
       <button class="action" onclick="appActions.doArmyAttack()">出征</button>
     </div>`;
     html += `<div id="tactic-desc" style="font-size:0.85rem;color:var(--muted)"></div>`;
@@ -102,12 +102,15 @@ function renderMilitary(c) {
 
   c.innerHTML = html;
 
-  const armySel = document.getElementById('atk-army');
-  const toSel = document.getElementById('atk-to');
-  if (armySel && toSel) {
-    armySel.addEventListener('change', () => { appActions.updateAtkTargets(); appActions.updateAtkPreview(); });
-    toSel.addEventListener('change', appActions.updateAtkPreview);
-    appActions.updateAtkTargets();
+  // 渲染时 contentDiv 尚未挂载到文档，直接 document.getElementById 会取到 null；
+  // 延迟到内容挂载后再绑定事件并初始化战术描述与战前估算（与 internal.js 的 setTimeout 手法一致）
+  setTimeout(() => {
+    const armySel = document.getElementById('atk-army');
+    const toSel = document.getElementById('atk-to');
+    if (!armySel || !toSel) return;
+    armySel.addEventListener('change', () => { updateAtkTargets(); updateAtkPreview(); });
+    toSel.addEventListener('change', updateAtkPreview);
+    updateAtkTargets();
     const tacticSel = document.getElementById('atk-tactic');
     const tacticDesc = document.getElementById('tactic-desc');
     if (tacticSel && tacticDesc) {
@@ -122,8 +125,8 @@ function renderMilitary(c) {
       tacticSel.addEventListener('change', updateTacticDesc);
       updateTacticDesc();
     }
-    appActions.updateAtkPreview();
-  }
+    updateAtkPreview();
+  }, 0);
 }
 
 function updateAtkTargets() {

@@ -13,6 +13,9 @@ import { showBattleFx, showBattleReport } from '../ui/common.js';
 import { playSound } from './audio.js';
 import { checkAchievements } from './achievements.js';
 
+// AI 每城保留的最低守军，防止建军/补兵抽空城防导致被轻易反攻
+const AI_MIN_GARRISON = 300;
+
 function aiArmyTacticHint(f, city) {
   const nearby = city.neighbors.map(n => findCity(n)).filter(Boolean);
   const riverRatio = nearby.length ? nearby.filter(n => RIVER_CITIES.includes(n.name)).length / nearby.length : 0;
@@ -89,9 +92,9 @@ function aiTurn(f) {
   // AI tech upgrade
   if (f.gold > 800 && Math.random() < diff.aiTechChance) {
     const preferred = f.personality === 'expansion' ? 'military' : (f.personality === 'diplomatic' ? 'comm' : 'farm');
-    const techOptions = ['farm', 'comm', 'military', 'fort'];
-    const preferredInfo = f.tech[preferred];
-    const tech = preferredInfo && preferredInfo.level < preferredInfo.max ? preferred : techOptions.find(k => f.tech[k] && f.tech[k].level < f.tech[k].max);
+    // 只考虑未满级的科技；优先升级偏好项，否则升第一个未满的（全部满级则不升级）
+    const available = ['farm', 'comm', 'military', 'fort'].filter(k => f.tech[k] && f.tech[k].level < f.tech[k].max);
+    const tech = available.length ? (available.includes(preferred) ? preferred : available[0]) : null;
     const techInfo = tech ? f.tech[tech] : null;
     if (techInfo) {
       f.gold -= 500;
@@ -142,8 +145,9 @@ function aiTurn(f) {
   const eliteCfg = getEliteTroop(f.id);
   cities.forEach(city=>{
     const stationed = myArmies.filter(a=>a.city===city.name);
-    if(stationed.length===0 && city.troops>=500){
-      const use = Math.min(city.troops, 1500);
+    // 建军/补兵均保留每城最低守军，避免抽空城防被轻易反攻
+    if(stationed.length===0 && city.troops >= AI_MIN_GARRISON + 500){
+      const use = Math.min(city.troops - AI_MIN_GARRISON, 1500);
       const comp = getOptimalAIComp(f, city, use);
       const gens = pickAIGenerals(f, comp.hint);
       let elite = 0;
@@ -153,9 +157,9 @@ function aiTurn(f) {
       }
       st.armies.push({id:st.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, formation:comp.formation, infantry:comp.infantry, cavalry:comp.cavalry, archer:comp.archer, elite, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
       city.troops -= use;
-    } else if(stationed.length && city.troops>=300){
+    } else if(stationed.length && city.troops >= AI_MIN_GARRISON + 100){
       const a = stationed[0];
-      const add = Math.min(city.troops-200, 500);
+      const add = Math.min(city.troops - AI_MIN_GARRISON, 500);
       const comp = getOptimalAIComp(f, city, add);
       a.infantry += comp.infantry; a.cavalry += comp.cavalry; a.archer += comp.archer;
       if (!a.formation) a.formation = comp.formation;
