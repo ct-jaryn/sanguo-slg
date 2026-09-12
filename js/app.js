@@ -2,6 +2,7 @@ import { initState, getState } from './core/state.js';
 import { renderAll } from './ui/renderer.js';
 import { log } from './core/log.js';
 import { closeModal, switchTab } from './ui/common.js';
+import { showToast } from './ui/toast.js';
 import {
   showTutorialStep, nextTutorialStep, prevTutorialStep, skipTutorial, closeTutorial
 } from './systems/tutorial.js';
@@ -37,6 +38,7 @@ const appActions = {
   initGame,
   switchTab,
   closeModal,
+  showToast,
 
   closeTutorial,
   showTutorial: showTutorialStep,

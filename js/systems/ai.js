@@ -156,21 +156,24 @@ function aiTurn(f) {
         elite = Math.min(Math.floor(baseCount * 0.3), Math.floor(use * 0.2));
       }
       st.armies.push({id:st.nextArmyId++, faction:f.id, name:`${city.name}军`, city:city.name, generals:gens, formation:comp.formation, infantry:comp.infantry, cavalry:comp.cavalry, archer:comp.archer, elite, troopXP:{infantry:0,cavalry:0,archer:0}, troopLevel:{infantry:1,cavalry:1,archer:1}});
-      city.troops -= use;
+      // 精锐也占用城池兵力，不能白嫖
+      city.troops -= (use + elite);
     } else if(stationed.length && city.troops >= AI_MIN_GARRISON + 100){
       const a = stationed[0];
       const add = Math.min(city.troops - AI_MIN_GARRISON, 500);
       const comp = getOptimalAIComp(f, city, add);
       a.infantry += comp.infantry; a.cavalry += comp.cavalry; a.archer += comp.archer;
       if (!a.formation) a.formation = comp.formation;
+      let addElite = 0;
       if (eliteCfg && eliteUnlocked(f)) {
         const baseAdded = comp[eliteCfg.base] || 0;
-        const addElite = Math.min(Math.floor(baseAdded * 0.3), Math.floor(add * 0.2));
+        addElite = Math.min(Math.floor(baseAdded * 0.3), Math.floor(add * 0.2));
         a.elite = (a.elite || 0) + addElite;
         const cap = eliteCap(a, eliteCfg);
-        if (a.elite > cap) a.elite = cap;
+        if (a.elite > cap) { addElite -= (a.elite - cap); a.elite = cap; }
       }
-      city.troops -= add;
+      // 精锐也占用城池兵力
+      city.troops -= (add + addElite);
     }
   });
 }
@@ -232,7 +235,8 @@ function aiArmyAttack(f) {
         checkAchievements();
         // AI 攻玩家城池时给玩家弹战报与特效（attacker 必为 AI，playerInvolved 即玩家为守方）
         if(result && result.playerInvolved && result.report){
-          showBattleFx(result.fxText, result.victory ? '' : 'defeat');
+          const fxType = tactic === 'fire' || tactic === 'siege' ? 'fire' : tactic === 'water' ? 'water' : 'slash';
+          showBattleFx(result.fxText, result.victory ? '' : 'defeat', fxType);
           playSound(result.sound);
           showBattleReport(result.report);
         }

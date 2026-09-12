@@ -9,6 +9,12 @@
   --accent-orange: #e67e22;
   --text: #3d2b1f;
   --muted: #6d5a4b;
+  --shadow: 0 2px 8px rgba(61,43,31,0.15);
+  --shadow-lg: 0 4px 16px rgba(61,43,31,0.22);
+  --radius: 6px;
+  --radius-lg: 10px;
+  --transition: 0.18s ease;
+  --icon-path: '../assets';
 }
 
 * { box-sizing: border-box; }
@@ -19,4 +25,61 @@ body {
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
+
+::selection { background: rgba(196,30,58,0.25); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c4a882; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #a08060; }
+
+:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+
+a { color: var(--accent-red); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ===== Image Icon System ===== */
+.img-icon {
+  display: inline-block;
+  vertical-align: middle;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.img-icon.icon-sm { width: 16px; height: 16px; }
+.img-icon.icon-md { width: 22px; height: 22px; }
+.img-icon.icon-lg { width: 32px; height: 32px; }
+.img-icon.icon-xl { width: 48px; height: 48px; }
+
+/* Resource icons */
+.res-icon { width: 16px; height: 16px; border-radius: 2px; }
+
+/* Season icons */
+.season-icon { width: 20px; height: 20px; border-radius: 50%; }
+
+/* Nav icons */
+.nav-icon-img { width: 20px; height: 20px; border-radius: 50%; opacity: 0.85; }
+aside button.active .nav-icon-img { opacity: 1; }
+
+/* Troop icons */
+.troop-icon { width: 28px; height: 28px; }
+
+/* Building icons */
+.bld-icon { width: 48px; height: 48px; border-radius: 4px; }
+
+/* Faction emblem */
+.fac-emblem { width: 36px; height: 36px; border-radius: 4px; }
+
+/* Battle FX sprites */
+.fx-sprite {
+  position: absolute;
+  pointer-events: none;
+  object-fit: contain;
+}
+.fx-sprite-slash { width: 200px; height: 200px; }
+.fx-sprite-fire { width: 180px; height: 180px; }
+.fx-sprite-water { width: 200px; height: 160px; }
+.fx-sprite-arrow { width: 180px; height: 180px; }

@@ -7,6 +7,16 @@ import { POLICIES } from '../../config/policies.js';
 import { DIFFICULTY, CITY_TRAITS, getCityTraitEffects } from '../../config/constants.js';
 import { BUILDINGS, getCityBuildingEffects, getBuildingCost } from '../../config/buildings.js';
 import { renderAll } from '../common.js';
+import { showToast } from '../toast.js';
+
+const BLD_ICONS = {
+  farm: '../assets/buildings/split/bld-farm.png',
+  market: '../assets/buildings/split/bld-market.png',
+  barracks: '../assets/buildings/split/bld-barracks.png',
+  wall: '../assets/buildings/split/bld-wall.png',
+  workshop: '../assets/buildings/split/bld-granary.png',
+  academy: '../assets/buildings/split/bld-academy.png',
+};
 
 // 每城开发等级上限（开垦/商业共用），防止无限叠加产出
 const DEV_MAX = 10;
@@ -173,8 +183,14 @@ function updateBuildingPanel() {
     const maxed = lv >= cfg.maxLevel;
     const cost = getBuildingCost(cfg.id, lv);
     const canAfford = cost && p.gold >= cost.gold && p.food >= cost.food;
+    const bldIcon = BLD_ICONS[cfg.id] || '';
     html += `<tr>
-      <td><b>${cfg.name}</b><br/><span style="font-size:0.8rem;color:var(--muted)">${cfg.desc}</span></td>
+      <td style="text-align:left">
+        <div style="display:flex;align-items:center;gap:8px">
+          ${bldIcon ? `<img class="bld-icon" src="${bldIcon}" alt="" style="width:36px;height:36px;border-radius:4px">` : ''}
+          <div><b>${cfg.name}</b><br/><span style="font-size:0.8rem;color:var(--muted)">${cfg.desc}</span></div>
+        </div>
+      </td>
       <td>${lv}/${cfg.maxLevel}</td>
       <td>${lv > 0 ? cfg.effectDesc(lv) : '—'}</td>
       <td>${maxed ? '已满级' : `${cost.gold}金${cost.food ? ' ' + cost.food + '粮' : ''}`}</td>
@@ -189,13 +205,13 @@ function doBuildBuilding(cityName, buildingId) {
   const state = getState();
   const p = player();
   const city = factionCities(state.playerId).find(c => c.name === cityName);
-  if (!city) { alert('城池不存在'); return; }
+  if (!city) { showToast('城池不存在', 'error'); return; }
   const cfg = BUILDINGS[buildingId];
-  if (!cfg) { alert('建筑不存在'); return; }
+  if (!cfg) { showToast('建筑不存在', 'error'); return; }
   const lv = (city.buildings && city.buildings[buildingId]) || 0;
-  if (lv >= cfg.maxLevel) { alert('建筑已满级'); return; }
+  if (lv >= cfg.maxLevel) { showToast('建筑已满级', 'info'); return; }
   const cost = getBuildingCost(buildingId, lv);
-  if (p.gold < cost.gold || p.food < cost.food) { alert('资源不足'); return; }
+  if (p.gold < cost.gold || p.food < cost.food) { showToast('资源不足', 'warning'); return; }
   p.gold -= cost.gold;
   p.food -= cost.food;
   if (!city.buildings) city.buildings = {};

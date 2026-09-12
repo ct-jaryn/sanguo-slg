@@ -79,8 +79,8 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     }
     return { playerInvolved, victory: false, report: null, fxText: null, sound: null };
   }
-  // 非围城清除 siegeProgress
-  if (targetCity.siegeProgress && targetCity.siegeProgress.attackerId === attackerId) targetCity.siegeProgress = null;
+  // 非围城清除 siegeProgress（不论是谁发起的围城，非围城进攻都应重置）
+  if (targetCity.siegeProgress) targetCity.siegeProgress = null;
 
   let attack = 0;
   [['infantry',army.infantry],['cavalry',army.cavalry],['archer',army.archer]].forEach(([typeKey,troops])=>{
@@ -213,7 +213,8 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
     log(`${atkFaction.name} 的 ${army.name}(${mainGeneral ? mainGeneral.name : '无将'}) 攻占了 ${targetCity.name}！损失 ${losses} 兵力`);
     if (oldOwner && getState().factions[oldOwner] && factionCities(oldOwner).length === 0) log(`${getState().factions[oldOwner].name} 势力灭亡！`);
     report.atkLosses = losses;
-    report.defLosses = Math.max(0, originalDefTroops - targetCity.troops);
+    // 城池易主后 targetCity.troops 已被改为攻方驻军，不能再用它算守方损失
+    report.defLosses = originalDefTroops;
     report.reward = reward;
     report.equipment = dropped ? dropped.name : null;
   } else {
@@ -244,6 +245,7 @@ function armyBattle(attackerId, defenderId, army, targetCity, tacticKey='normal'
 }
 
 function applyArmyLosses(army, total, losses) {
+  if (total <= 0) return;
   const ratio = Math.max(0, (total - losses) / total);
   army.infantry = Math.floor(army.infantry * ratio);
   army.cavalry = Math.floor(army.cavalry * ratio);

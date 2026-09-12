@@ -97,7 +97,8 @@ function armyFoodNeed(f) {
     need += Math.floor(a.infantry / 100) * 20
       + Math.floor(a.cavalry / 100) * 30
       + Math.floor(a.archer / 100) * 22
-      + Math.floor((a.elite || 0) / 100) * 20 * (eliteFoodMul - 1);
+      // 精锐：基础粮饷 20 + 额外倍率部分
+      + Math.floor((a.elite || 0) / 100) * 20 * eliteFoodMul;
   });
   return need;
 }

@@ -39,6 +39,10 @@ function renderContent() {
     case 'logs': renderLogPage(contentDiv); break;
   }
   c.innerHTML = topHtml + contentDiv.innerHTML;
+  // Add fade-in animation
+  c.classList.remove('fade-in');
+  void c.offsetWidth;
+  c.classList.add('fade-in');
 }
 
 setRenderContent(renderContent);

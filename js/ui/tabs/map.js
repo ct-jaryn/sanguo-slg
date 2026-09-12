@@ -4,6 +4,14 @@ import { CITY_TRAITS } from '../../config/constants.js';
 import { BUILDINGS, getCityBuildingEffects } from '../../config/buildings.js';
 import { switchTab } from '../common.js';
 
+const FAC_EMBLEMS = {
+  liubei: '../assets/factions/split/fac-liubei.png',
+  caocao: '../assets/factions/split/fac-caocao.png',
+  sunquan: '../assets/factions/split/fac-sunquan.png',
+  yuanshao: '../assets/factions/split/fac-yuansha.png',
+  lubu: '../assets/factions/split/fac-lubu.png',
+};
+
 function renderMap(c) {
   const state = getState();
   // Focused bounding box around playable area for 48 cities
@@ -67,7 +75,13 @@ function renderMap(c) {
     }).join('')}
     </table></div>
     <div class="card"><h3>势力图例</h3>
-    ${Object.values(state.factions).filter(f=>!f.eliminated).map(f=>`<span style="margin-right:16px"><span class="faction-dot" style="background:${f.color}"></span>${f.name} · 城池${factionCities(f.id).length} · 兵力${Math.floor(f.troops)}</span>`).join('')}
+    ${Object.values(state.factions).filter(f=>!f.eliminated).map(f=>{
+      const emblem = FAC_EMBLEMS[f.id] || '';
+      return `<span style="margin-right:16px;display:inline-flex;align-items:center;gap:6px">
+        ${emblem ? `<img class="fac-emblem" src="${emblem}" alt="" style="width:28px;height:28px">` : `<span class="faction-dot" style="background:${f.color}"></span>`}
+        ${f.name} · 城池${factionCities(f.id).length} · 兵力${Math.floor(f.troops)}
+      </span>`;
+    }).join('')}
     </div>`;
   c.innerHTML = html;
 

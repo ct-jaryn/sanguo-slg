@@ -11,9 +11,25 @@ import { getCityBuildingEffects } from '../../config/buildings.js';
 import { TACTICS } from '../../config/tactics.js';
 import { armyBattle, estimateBattle } from '../../core/battle.js';
 import { showBattleFx, showBattleReport, renderAll, closeModal } from '../common.js';
+import { showToast } from '../toast.js';
 import { playSound } from '../../systems/audio.js';
 import { checkAchievements } from '../../systems/achievements.js';
 import { checkVictory } from '../../systems/gameEnd.js';
+
+const TROOP_ICONS = {
+  infantry: '../assets/troops/split/troop-infantry.png',
+  cavalry: '../assets/troops/split/troop-cavalry.png',
+  archer: '../assets/troops/split/troop-archer.png',
+};
+
+const BLD_ICONS = {
+  farm: '../assets/buildings/split/bld-farm.png',
+  market: '../assets/buildings/split/bld-market.png',
+  barracks: '../assets/buildings/split/bld-barracks.png',
+  wall: '../assets/buildings/split/bld-wall.png',
+  workshop: '../assets/buildings/split/bld-granary.png',
+  academy: '../assets/buildings/split/bld-academy.png',
+};
 
 function renderMilitary(c) {
   const state = getState();
@@ -48,9 +64,9 @@ function renderMilitary(c) {
         <td>${main}</td>
         <td>${a.generals.join(', ') || '-'}</td>
         <td>${form.name}</td>
-        <td title="${TROOP_TYPES.infantry.traitDesc}">${a.infantry} ${infName}</td>
-        <td title="${TROOP_TYPES.cavalry.traitDesc}">${a.cavalry} ${cavName}</td>
-        <td title="${TROOP_TYPES.archer.traitDesc}">${a.archer} ${arcName}</td>
+        <td title="${TROOP_TYPES.infantry.traitDesc}"><img class="troop-icon" src="${TROOP_ICONS.infantry}" alt="" style="width:20px;height:20px;vertical-align:middle"> ${a.infantry} ${infName}</td>
+        <td title="${TROOP_TYPES.cavalry.traitDesc}"><img class="troop-icon" src="${TROOP_ICONS.cavalry}" alt="" style="width:20px;height:20px;vertical-align:middle"> ${a.cavalry} ${cavName}</td>
+        <td title="${TROOP_TYPES.archer.traitDesc}"><img class="troop-icon" src="${TROOP_ICONS.archer}" alt="" style="width:20px;height:20px;vertical-align:middle"> ${a.archer} ${arcName}</td>
         ${eliteCell}
         <td>${armyTroopTotal(a)}</td>
         <td>
@@ -182,20 +198,20 @@ function reinforceCity(dir) {
   const p = player();
   const cityEl = document.getElementById('gar-city');
   const numEl = document.getElementById('gar-num');
-  if (!cityEl || !numEl) { alert('界面未就绪，请重新打开军事面板'); return; }
+  if (!cityEl || !numEl) { showToast('界面未就绪，请重新打开军事面板', 'error'); return; }
   const cityName = cityEl.value;
   const num = Math.max(0, parseInt(numEl.value)||0);
   const city = findCity(cityName);
-  if(!city || city.owner!==state.playerId){ alert('请选择己方城池'); return; }
-  if(num<100){ alert('数量至少100'); return; }
+  if(!city || city.owner!==state.playerId){ showToast('请选择己方城池', 'warning'); return; }
+  if(num<100){ showToast('数量至少100', 'warning'); return; }
   const garrisonCap = 6000 + getCityTraitEffects(city).garrisonCapBonus + getCityBuildingEffects(city).garrisonCapBonus;
   if(dir==='in'){
-    if(num>p.troops){ alert('预备役兵力不足'); return; }
-    if(city.troops+num>garrisonCap){ alert(`超过 ${city.name} 守军上限 ${garrisonCap}`); return; }
+    if(num>p.troops){ showToast('预备役兵力不足', 'warning'); return; }
+    if(city.troops+num>garrisonCap){ showToast(`超过 ${city.name} 守军上限 ${garrisonCap}`, 'warning'); return; }
     p.troops -= num; city.troops += num;
     log(`调 ${num} 兵力驻防 ${city.name}，守军达 ${Math.floor(city.troops)}`);
   }else{
-    if(num>city.troops){ alert('城池守军不足'); return; }
+    if(num>city.troops){ showToast('城池守军不足', 'warning'); return; }
     city.troops -= num; p.troops += num;
     log(`从 ${city.name} 撤回 ${num} 兵力至预备役`);
   }
@@ -208,32 +224,34 @@ function doArmyAttack() {
   const armySel = document.getElementById('atk-army');
   const toSel = document.getElementById('atk-to');
   const tacticSel = document.getElementById('atk-tactic');
-  if (!armySel || !toSel || !tacticSel) { alert('界面未就绪，请重新打开军事面板'); return; }
+  if (!armySel || !toSel || !tacticSel) { showToast('界面未就绪，请重新打开军事面板', 'error'); return; }
   const rawArmyId = armySel.value;
   const armyId = parseInt(rawArmyId, 10);
   const toName = toSel.value;
   const tacticKey = tacticSel.value;
-  if (!rawArmyId || rawArmyId === '' || isNaN(armyId)) { alert('请选择出征军团'); return; }
+  if (!rawArmyId || rawArmyId === '' || isNaN(armyId)) { showToast('请选择出征军团', 'warning'); return; }
   const army = findArmy(armyId);
-  if (!army) { alert('所选军团不存在或已解散'); return; }
-  if (!toName || toName === '请先选军团' || toName === '无相邻目标' || toName === '无出发城池') { alert('请选择目标城池'); return; }
+  if (!army) { showToast('所选军团不存在或已解散', 'error'); return; }
+  if (!toName || toName === '请先选军团' || toName === '无相邻目标' || toName === '无出发城池') { showToast('请选择目标城池', 'warning'); return; }
   const target = findCity(toName);
-  if (!target) { alert('目标城池不存在'); return; }
-  if(target.owner===state.playerId) { alert('不能攻击己方城池'); return; }
-  if(target.owner && relation(state.playerId,target.owner)>=80) { alert('不能攻击盟友'); return; }
+  if (!target) { showToast('目标城池不存在', 'error'); return; }
+  if(target.owner===state.playerId) { showToast('不能攻击己方城池', 'warning'); return; }
+  if(target.owner && relation(state.playerId,target.owner)>=80) { showToast('不能攻击盟友', 'warning'); return; }
   const fromCity = army.city ? findCity(army.city) : factionCities(state.playerId)[0];
-  if(!fromCity || fromCity.owner!==state.playerId) { alert('军团驻扎城已丢失，请重新驻防'); return; }
-  if(!fromCity.neighbors || !fromCity.neighbors.includes(target.name)) { alert('目标不相邻'); return; }
-  if(armyTroopTotal(army)<100) { alert('军团兵力不足'); return; }
+  if(!fromCity || fromCity.owner!==state.playerId) { showToast('军团驻扎城已丢失，请重新驻防', 'error'); return; }
+  if(!fromCity.neighbors || !fromCity.neighbors.includes(target.name)) { showToast('目标不相邻', 'warning'); return; }
+  if(armyTroopTotal(army)<100) { showToast('军团兵力不足', 'warning'); return; }
   const mainGeneral = army.generals.length ? findGeneral(army.generals[0]) : null;
-  if(mainGeneral && mainGeneral.injured) { alert('主将受伤中'); return; }
+  if(mainGeneral && mainGeneral.injured) { showToast('主将受伤中', 'warning'); return; }
   const tactic = TACTICS[tacticKey];
-  if(tactic.req && !tactic.req(mainGeneral, target)) { alert('当前主将不满足该战术条件'); return; }
+  if(tactic.req && !tactic.req(mainGeneral, target)) { showToast('当前主将不满足该战术条件', 'warning'); return; }
   if(target.owner) setRelation(state.playerId,target.owner,-100);
   const result = armyBattle(state.playerId, target.owner||'neutral', army, target, tacticKey);
   // 围城非决胜回合无战报（report 为 null），只刷新界面
   if (result && result.playerInvolved && result.report) {
-    showBattleFx(result.fxText, result.victory ? '' : 'defeat');
+    // Determine FX type from tactic
+    const fxType = tacticKey === 'fire' ? 'fire' : tacticKey === 'siege' ? 'fire' : tacticKey === 'normal' ? 'slash' : 'slash';
+    showBattleFx(result.fxText, result.victory ? '' : 'defeat', fxType);
     playSound(result.sound);
     showBattleReport(result.report);
     checkAchievements();
@@ -250,7 +268,7 @@ function openArmyEditor(armyId=null) {
   const availableGens = availableGenerals(state.playerId, armyId);
   const maxArmies = pcities.length;
   const currentCount = factionArmies(state.playerId).length;
-  if(!army && currentCount>=maxArmies){ alert('军团数量已达城池数量上限'); return; }
+  if(!army && currentCount>=maxArmies){ showToast('军团数量已达城池数量上限', 'warning'); return; }
 
   const currentGens = army ? army.generals : [];
   const unselectedGens = availableGens.map(g=>g.name);
@@ -298,11 +316,11 @@ function saveArmy(armyId) {
   const eliteCfg = getEliteTroop(state.playerId);
   const eliteInput = document.getElementById('army-elite');
   let elite = eliteInput ? Math.max(0, parseInt(eliteInput.value)||0) : 0;
-  if (eliteCfg && elite > 0 && !eliteUnlocked(p)) { alert('精锐部队尚未解锁'); return; }
+  if (eliteCfg && elite > 0 && !eliteUnlocked(p)) { showToast('精锐部队尚未解锁', 'warning'); return; }
   if (eliteCfg) {
     const baseCount = { infantry, cavalry, archer }[eliteCfg.base] || 0;
     const maxElite = Math.floor(baseCount * 0.3);
-    if (elite > maxElite) { alert(`${eliteCfg.name} 不能超过对应基础兵力的30%（当前上限 ${maxElite}）`); return; }
+    if (elite > maxElite) { showToast(`${eliteCfg.name} 不能超过对应基础兵力的30%（当前上限 ${maxElite}）`, 'warning'); return; }
   } else {
     elite = 0;
   }
@@ -310,12 +328,12 @@ function saveArmy(armyId) {
   const existing = armyId ? findArmy(armyId) : null;
   const existingTotal = existing ? armyTroopTotal(existing) : 0;
   const total = infantry + cavalry + archer + elite;
-  if(total > p.troops + existingTotal){ alert('兵力不足'); return; }
-  if(total < 100){ alert('军团总兵力至少100'); return; }
+  if(total > p.troops + existingTotal){ showToast('兵力不足', 'warning'); return; }
+  if(total < 100){ showToast('军团总兵力至少100', 'warning'); return; }
 
   if(armyId){
     const army = existing;
-    if (!army) { alert('军团不存在'); return; }
+    if (!army) { showToast('军团不存在', 'error'); return; }
     p.troops += armyTroopTotal(army);
     army.name = name; army.city = city; army.generals = gens; army.formation = formation;
     army.infantry = infantry; army.cavalry = cavalry; army.archer = archer; army.elite = elite;

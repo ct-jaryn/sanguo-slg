@@ -4,6 +4,15 @@ import {
   player, relation, setRelation
 } from '../../core/utils.js';
 import { renderAll } from '../common.js';
+import { showToast } from '../toast.js';
+
+const FAC_EMBLEMS = {
+  liubei: '../assets/factions/split/fac-liubei.png',
+  caocao: '../assets/factions/split/fac-caocao.png',
+  sunquan: '../assets/factions/split/fac-sunquan.png',
+  yuanshao: '../assets/factions/split/fac-yuansha.png',
+  lubu: '../assets/factions/split/fac-lubu.png',
+};
 
 function renderDiplomacy(c) {
   const state = getState();
@@ -13,15 +22,19 @@ function renderDiplomacy(c) {
     others.map(f=>{
       const r = relation(state.playerId,f.id);
       let level = r>=80?'盟友':r>=50?'友好':r>=20?'中立':r>=0?'敌对':'战争';
-      return `<div style="margin:8px 0;padding:8px;border:1px solid var(--border);border-radius:4px">
-        <b><span class="faction-dot" style="background:${f.color}"></span>${f.name}</b> 关系值:${r} (${level})
-        <div style="margin-top:6px">
-          <button class="action" onclick="appActions.doDiplomacy('ally','${f.id}')" ${p.gold<500||r<50||p.allies.includes(f.id)?'disabled':''}>${p.allies.includes(f.id)?'已结盟':'结盟(500金)'}</button>
-          <button class="action" onclick="appActions.doDiplomacy('trade','${f.id}')" ${p.food<200?'disabled':''}>贸易(200粮)</button>
-          <button class="action" onclick="appActions.doDiplomacy('gift','${f.id}')" ${p.gold<300?'disabled':''}>送礼(300金)</button>
-          <button class="action" onclick="appActions.doDiplomacy('sow','${f.id}')" ${p.gold<400?'disabled':''}>离间(400金)</button>
-          <button class="action" onclick="appActions.doDiplomacy('peace','${f.id}')" ${p.gold<300||r>=0?'disabled':''}>停战(300金)</button>
-          <button class="action" onclick="appActions.doDiplomacy('war','${f.id}')">宣战</button>
+      const emblem = FAC_EMBLEMS[f.id] || '';
+      return `<div class="faction-card" style="margin:8px 0">
+        ${emblem ? `<img class="fac-emblem" src="${emblem}" alt="">` : `<span class="faction-dot" style="background:${f.color};width:36px;height:36px"></span>`}
+        <div style="flex:1">
+          <b>${f.name}</b> 关系值:${r} (${level})
+          <div style="margin-top:6px">
+            <button class="action" onclick="appActions.doDiplomacy('ally','${f.id}')" ${p.gold<500||r<50||p.allies.includes(f.id)?'disabled':''}>${p.allies.includes(f.id)?'已结盟':'结盟(500金)'}</button>
+            <button class="action" onclick="appActions.doDiplomacy('trade','${f.id}')" ${p.food<200?'disabled':''}>贸易(200粮)</button>
+            <button class="action" onclick="appActions.doDiplomacy('gift','${f.id}')" ${p.gold<300?'disabled':''}>送礼(300金)</button>
+            <button class="action" onclick="appActions.doDiplomacy('sow','${f.id}')" ${p.gold<400?'disabled':''}>离间(400金)</button>
+            <button class="action" onclick="appActions.doDiplomacy('peace','${f.id}')" ${p.gold<300||r>=0?'disabled':''}>停战(300金)</button>
+            <button class="action btn-danger" onclick="appActions.doDiplomacy('war','${f.id}')">宣战</button>
+          </div>
         </div>
       </div>`;
     }).join('') + `</div>`;
