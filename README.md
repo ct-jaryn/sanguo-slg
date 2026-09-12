@@ -21,8 +21,13 @@
 - **军团作战与科技**：编组军团出征攻城，农、商、军、城防四系科技提升国力，兵种经验升级（最高 5 级）。
 - **动态事件系统**：随机事件与历史事件交织，玩家可做出分支选择影响势力发展。
 - **AI 对手**：四大 AI 势力拥有不同性格（扩张型 / 外交型），自主发展经济、招兵买马、攻城略地；支持简单 / 普通 / 困难三档难度。
+- **城池建筑系统**：农田 / 市场 / 兵营 / 城墙 / 工坊 / 书院六种建筑，每城独立升级，影响产出、防御与特殊效果。
+- **精锐部队**：各方势力拥有独一无二的精锐兵种（白毦兵、虎豹骑、解烦兵等），需军事科技 2 级解锁。
 - **存档系统**：自动存档 + 手动存档（localStorage），支持加密导出 / 导入存档代码，跨设备转移进度。
 - **新手引导与成就**：内置分步教程、页签新手提示、任务与成就系统，以及游戏结局评价。
+- **精美视觉素材**：中国传统工笔/篆刻/水墨风格图标与插画，覆盖资源、季节、兵种、建筑、势力徽章、战斗特效等全套 UI 素材。
+- **Toast 通知系统**：非阻塞式消息提示，替代原生 alert，支持成功 / 错误 / 警告 / 信息 / 战斗五种样式。
+- **战斗特效动画**：按战术类型（斩击 / 火焰 / 水浪 / 箭雨）播放对应的图片精灵动画。
 
 ## 🕹️ 操作说明
 
@@ -31,12 +36,12 @@
 | 操作 | 说明 |
 | --- | --- |
 | 左侧边栏点击 | 切换内政 / 军事 / 人才 / 外交 / 地图 / 事件 / 成就 / 任务 / 日志页签 |
-| 「下一回合」按钮 | 结束当前回合，推进月份并结算经济、事件与 AI 行动 |
+| 「结束回合」按钮 | 结束当前回合，推进月份并结算经济、事件与 AI 行动 |
 | 内政页 | 选择政策、执行内政指令、建设城池建筑 |
 | 军事页 | 编组 / 解散军团、选择兵种阵型、增援城池、发起进攻 |
 | 人才页 | 寻访人才（300 金）、招降敌将（500 金）、装备商店、穿戴装备 |
 | 外交页 | 与其他势力结盟（500 金）、贸易（200 粮）等 |
-| 地图页 | 在 SVG 中国地图上点击城池，快速跳转军事页发起攻略 |
+| 地图页 | 在中国地图上点击城池，快速跳转军事页发起攻略 |
 | 事件页 | 查看并选择处理待决事件 |
 
 首次进入会自动弹出**新手教程**，可逐步学习或点击「跳过」。
@@ -47,6 +52,8 @@
 - **SVG 地图**渲染中国城池布局
 - **Web Audio API** 生成音效（`js/systems/audio.js`）
 - **localStorage** 本地存档（`sanguo_slg_save` / `sanguo_slg_autosave`），加密存档导入导出基于 `TextEncoder`/`TextDecoder`
+- **图片素材系统**：`assets/` 目录下按功能分类存放图标与插画，通过 CSS/JS 引用
+- **Toast 通知**：`js/ui/toast.js` 提供非阻塞消息提示
 - 模块化架构：`core`（状态 / 战斗 / 日志 / 工具）、`systems`（经济 / AI / 事件 / 存档等）、`ui`（渲染与各页签）、`config` / `data`（数值与静态数据）
 
 ## 🚀 快速开始
@@ -58,7 +65,7 @@
 由于入口采用 ES Modules，建议通过本地服务器访问（Windows 可用 `py` 或 `python`）：
 
 ```bash
-cd games/sanguo-slg
+cd sanguo-slg
 python -m http.server 8000
 # 或使用 Node.js
 npx serve .
@@ -78,15 +85,25 @@ npx serve .
 sanguo-slg/
 ├── index.html              # 主入口（模块化版本）
 ├── sanguo_slg.html         # 旧版单文件兼容入口
+├── logo-sanguo-slg.png     # 游戏 Logo
 ├── china.svg               # 中国地图 SVG
-├── assets/china.svg        # 地图资源副本
+├── assets/                 # 游戏图片素材
+│   ├── icons/              #   资源 / 导航 / 操作 / 头像框图标
+│   │   ├── split/          #   资源图标（粮/金/兵/民心）
+│   │   ├── nav-split/      #   侧栏导航图标（9 页签）
+│   │   └── action-split/   #   操作按钮图标
+│   ├── seasons/split/      # 季节图标（春夏秋冬）
+│   ├── troops/split/       # 兵种图标（步/骑/弓）
+│   ├── buildings/split/    # 建筑图标（6 种）
+│   ├── factions/split/     # 势力徽章（5 方）
+│   └── battle/split/       # 战斗特效（斩击/火/水/箭雨）
 ├── css/                    # 样式：base / layout / components / map / animations
 ├── js/
 │   ├── app.js              # 应用入口，聚合全部交互动作
 │   ├── core/               # state 状态、battle 战斗结算、log、utils
 │   ├── systems/            # economy 回合结算、ai、eventSystem、save、audio、
 │   │                       # achievements、tutorial、gameEnd
-│   ├── ui/                 # renderer、common 及 tabs/ 下九个页签视图
+│   ├── ui/                 # renderer、common、toast、icons 及 tabs/ 下九个页签
 │   ├── config/             # constants、policies、buildings、skills、bonds、
 │   │                       # equipment、eliteTroops、tactics、events、quests
 │   └── data/               # factions、cities、generals 静态数据
